@@ -1,0 +1,813 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1c2450">
+<title>Ola</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231c2450'/%3E%3Ccircle cx='16' cy='16' r='8' fill='none' stroke='%23f0b53e' stroke-width='3'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#1c2450; --ink:#f8f7f3; --bg2:#242d5c; --line:#38427a; --muted:#aab0d4; --pat:#2a3364;
+  --mine:#f0b53e; --mine-ink:#15171f; --theirs:#2c386e; --theirs-ink:#f8f7f3;
+  --fs:16px; --pat-op:1;
+  --font:"Bricolage Grotesque",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 var(--fs)/1.45 var(--font);-webkit-text-size-adjust:100%}
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;opacity:var(--pat-op);
+  background-image:
+    radial-gradient(circle at 50% 50%,transparent 0 9px,var(--pat) 9px 10.5px,transparent 10.5px),
+    radial-gradient(circle at 50% 50%,transparent 0 9px,var(--pat) 9px 10.5px,transparent 10.5px);
+  background-size:28px 28px;background-position:0 0,14px 14px;
+}
+[hidden]{display:none !important}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--mine);outline-offset:2px}
+.view{position:relative;min-height:100dvh}
+
+/* ---------- masuk / setup ---------- */
+.gate{max-width:460px;margin:0 auto;padding:max(40px,env(safe-area-inset-top)) 24px 48px}
+.mark{font-size:clamp(56px,16vw,92px);font-weight:800;font-stretch:80%;letter-spacing:-.035em;line-height:.95;margin:6vh 0 10px}
+.lede{margin:0 0 28px;color:var(--muted);max-width:34ch}
+.field{display:block;margin:0 0 16px}
+.field>span{display:block;font-weight:600;margin-bottom:6px}
+.field small{display:block;color:var(--muted);margin-top:5px}
+.field input{width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg2);min-height:48px}
+.field input::placeholder{color:var(--muted);opacity:.7}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 22px;border-radius:12px;border:0;font-weight:700;background:var(--mine);color:var(--mine-ink)}
+.btn.block{width:100%}
+.btn.ghost{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+.btn:disabled{opacity:.55;cursor:default}
+.note{padding:12px 14px;border-radius:12px;background:var(--bg2);border:1.5px solid var(--line);margin:0 0 16px}
+.note.err{border-color:#e5766b}
+.note p{margin:0 0 10px}.note p:last-child{margin:0}
+details{margin-top:28px;color:var(--muted)}
+details summary{cursor:pointer;font-weight:600;color:var(--ink)}
+details ol{padding-left:20px;margin:12px 0}
+details li{margin:6px 0}
+pre{background:var(--bg2);border:1.5px solid var(--line);border-radius:12px;padding:12px;overflow:auto;font-size:12.5px;line-height:1.5;color:var(--ink);max-height:260px}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+
+/* ---------- ruang obrolan ---------- */
+#v-chat{display:grid;grid-template-rows:auto 1fr auto;height:100dvh;max-width:780px;margin:0 auto;background:color-mix(in srgb,var(--bg) 82%,transparent)}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:max(10px,env(safe-area-inset-top)) 14px 10px;background:var(--bg2);border-bottom:1.5px solid var(--line);position:relative;z-index:2}
+.room{min-width:0}
+.room h1{margin:0;font-size:1.15em;font-weight:750;font-stretch:90%;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.status{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:.8em}
+.status i{width:8px;height:8px;border-radius:50%;background:#d9a441}
+.status.on i{background:#58c48a}
+.status.off i{background:#e5766b}
+.top nav{display:flex;gap:6px;flex-shrink:0}
+.chip{min-height:40px;padding:0 14px;border-radius:10px;border:1.5px solid var(--line);background:transparent;font-weight:600;font-size:.9em}
+.chip:hover{background:var(--line)}
+
+#log{overflow-y:auto;padding:16px 14px 12px;display:flex;flex-direction:column;gap:3px;overscroll-behavior:contain}
+.empty{margin:auto;text-align:center;color:var(--muted);max-width:30ch}
+.sep{align-self:center;margin:14px 0 8px;padding:3px 12px;border-radius:99px;background:var(--bg2);border:1px solid var(--line);color:var(--muted);font-size:.78em}
+.msg{display:flex;max-width:100%}
+.msg.mine{justify-content:flex-end}
+.bubble{position:relative;max-width:min(78%,520px);padding:8px 12px 6px;border-radius:16px;word-wrap:break-word;overflow-wrap:anywhere}
+.theirs .bubble{background:var(--theirs);color:var(--theirs-ink);border-bottom-left-radius:5px}
+.mine .bubble{background:var(--mine);color:var(--mine-ink);border-bottom-right-radius:5px}
+.who{font-weight:700;font-size:.82em;margin-bottom:2px;opacity:.85}
+.txt{white-space:pre-wrap}
+.txt a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+.meta{display:flex;justify-content:flex-end;gap:8px;font-size:.72em;opacity:.68;margin-top:2px}
+.imgwrap{width:min(320px,64vw);border-radius:10px;overflow:hidden;background:rgba(127,127,127,.22);margin:2px 0 6px;cursor:zoom-in;aspect-ratio:4/3;max-height:380px}
+.imgwrap img{display:block;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .2s}
+.imgwrap.ok img{opacity:1}
+.imgwrap.fail{display:grid;place-items:center;cursor:default;font-size:.8em;opacity:.7}
+.imgwrap.fail::after{content:"Gambar tidak bisa dimuat"}
+.more{position:absolute;top:2px;right:2px;width:28px;height:28px;border-radius:8px;border:0;background:transparent;opacity:0;font-size:18px;line-height:1}
+.bubble:hover .more,.more:focus-visible{opacity:.8}
+@media (hover:none){.more{opacity:.55}}
+.mine .more{left:-30px;right:auto;color:var(--ink)}
+.theirs .more{right:-30px;color:var(--ink)}
+
+#newPill{position:absolute;left:50%;transform:translateX(-50%);bottom:112px;z-index:3;border:0;border-radius:99px;padding:8px 16px;background:var(--mine);color:var(--mine-ink);font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.28)}
+
+.composer{padding:10px 12px max(12px,env(safe-area-inset-bottom));background:var(--bg2);border-top:1.5px solid var(--line)}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 8px;padding:6px 10px;border-radius:10px;background:var(--bg);border:1px solid var(--line);font-size:.85em;color:var(--muted)}
+.bar button{border:0;background:transparent;font-weight:700;padding:4px 8px;color:var(--ink)}
+#preview img{height:52px;border-radius:8px;display:block}
+.inputrow{display:flex;gap:8px;align-items:flex-end}
+#input{flex:1;resize:none;max-height:140px;padding:11px 14px;border-radius:14px;border:1.5px solid var(--line);background:var(--bg);min-height:46px;line-height:1.35}
+#send{min-height:46px;padding:0 20px}
+
+/* ---------- panel tema, menu, lightbox ---------- */
+.sheet{position:fixed;inset:0;z-index:20;display:flex;align-items:flex-end;justify-content:center;background:rgba(5,8,20,.5)}
+.sheet>div{width:min(560px,100%);max-height:92dvh;overflow:auto;background:var(--bg2);color:var(--ink);border:1.5px solid var(--line);border-radius:20px 20px 0 0;padding:20px 20px max(20px,env(safe-area-inset-bottom))}
+.sheet h2{margin:0 0 14px;font-size:1.2em;font-weight:750;font-stretch:90%}
+.sheet h3{margin:18px 0 8px;font-size:.95em;font-weight:650}
+.presets{display:flex;gap:8px;flex-wrap:wrap}
+.preset{width:64px;height:48px;border-radius:12px;border:2px solid var(--line);padding:0;overflow:hidden;display:flex}
+.preset[aria-pressed=true]{border-color:var(--ink)}
+.preset span{flex:1}
+.colors{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.colors label{display:flex;flex-direction:column;gap:6px;font-size:.85em;color:var(--muted)}
+.colors input[type=color]{width:100%;height:44px;padding:2px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg)}
+.sheet input[type=range]{width:100%;accent-color:var(--mine)}
+.check{display:flex;gap:10px;align-items:center;margin-top:12px}
+.check input{width:20px;height:20px;accent-color:var(--mine)}
+.demo{margin-top:14px;padding:14px;border-radius:14px;background:var(--bg);border:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.demo .msg .bubble{max-width:80%}
+
+#menu{position:fixed;z-index:30;min-width:150px;padding:6px;border-radius:12px;background:var(--bg2);border:1.5px solid var(--line);box-shadow:0 8px 24px rgba(0,0,0,.35)}
+#menu button{display:block;width:100%;text-align:left;padding:10px 12px;border:0;border-radius:8px;background:transparent;font-weight:600}
+#menu button:hover{background:var(--line)}
+#menu button.danger{color:#ff9a8f}
+#lightbox{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.88);display:grid;place-items:center;padding:16px;cursor:zoom-out}
+#lightbox img{max-width:100%;max-height:100%;border-radius:8px}
+#toast{position:fixed;left:50%;bottom:max(90px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:50;max-width:min(92vw,420px);padding:10px 16px;border-radius:12px;background:var(--ink);color:var(--bg);font-weight:600;font-size:.9em;pointer-events:none}
+@media (prefers-reduced-motion:reduce){*{transition:none !important}}
+@media (max-width:520px){.top nav .chip{padding:0 10px}.bubble{max-width:84%}}
+</style>
+</head>
+<body>
+
+<noscript><p style="padding:24px">Ola membutuhkan JavaScript.</p></noscript>
+
+<!-- 1. Alamat database (sekali saja, oleh pembuat) -->
+<section id="v-setup" class="view" hidden>
+  <div class="gate">
+    <h1 class="mark">Ola</h1>
+    <p class="lede">Satu langkah lagi: hubungkan ke database gratismu sendiri.</p>
+    <form id="setupForm" novalidate>
+      <label class="field"><span>Alamat database</span>
+        <input id="dbUrl" inputmode="url" autocomplete="off" placeholder="https://nama-proyek-default-rtdb.asia-southeast1.firebasedatabase.app">
+        <small>Salin dari tab Data di Realtime Database.</small>
+      </label>
+      <div id="setupErr" class="note err" hidden></div>
+      <button class="btn block" type="submit">Simpan alamat</button>
+    </form>
+    <details open>
+      <summary>Cara membuat database (gratis, dari browser)</summary>
+      <ol>
+        <li>Buka <b>console.firebase.google.com</b>, masuk dengan akun Google, lalu <b>Create a project</b>. Analytics boleh dimatikan.</li>
+        <li>Menu <b>Build → Realtime Database → Create Database</b>. Pilih lokasi <b>Singapore</b> dan mode <b>locked</b>.</li>
+        <li>Buka tab <b>Rules</b>, hapus isinya, tempel aturan di bawah, lalu <b>Publish</b>.</li>
+        <li>Buka tab <b>Data</b>, salin alamat yang diawali <code>https://</code> ke kolom di atas.</li>
+      </ol>
+      <pre id="rulesBox"></pre>
+      <button class="btn ghost" id="copyRules" type="button">Salin aturan</button>
+    </details>
+  </div>
+</section>
+
+<!-- 2. Masuk ke room -->
+<section id="v-login" class="view" hidden>
+  <div class="gate">
+    <h1 class="mark">Ola</h1>
+    <p class="lede">Obrolan tertutup. Masuk dengan nama room dan password yang kamu terima.</p>
+    <form id="loginForm" novalidate>
+      <label class="field"><span>Nama room</span>
+        <input id="room" autocomplete="off" maxlength="40" placeholder="mis. kantin belakang">
+      </label>
+      <label class="field"><span>Password room</span>
+        <input id="pass" type="password" autocomplete="off" maxlength="80">
+      </label>
+      <label class="field"><span>Namamu di obrolan</span>
+        <input id="user" autocomplete="nickname" maxlength="24" placeholder="bebas, mis. Budi">
+      </label>
+      <div id="loginMsg" class="note" hidden></div>
+      <button class="btn block" id="loginBtn" type="submit">Masuk</button>
+    </form>
+    <details>
+      <summary>Pengaturan database</summary>
+      <p>Database saat ini: <code id="dbShown"></code></p>
+      <div class="row">
+        <button class="btn ghost" id="copyInvite" type="button">Salin tautan undangan</button>
+        <button class="btn ghost" id="resetDb" type="button">Ganti database</button>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- 3. Obrolan -->
+<section id="v-chat" class="view" hidden>
+  <header class="top">
+    <div class="room">
+      <h1 id="roomTitle"></h1>
+      <div class="status" id="status"><i></i><span>Menyambung…</span></div>
+    </div>
+    <nav>
+      <button class="chip" id="btnTheme" type="button">Tema</button>
+      <button class="chip" id="btnInvite" type="button">Undang</button>
+      <button class="chip" id="btnLeave" type="button">Keluar</button>
+    </nav>
+  </header>
+  <main id="log" aria-live="polite" aria-label="Pesan"></main>
+  <button id="newPill" type="button" hidden>Pesan baru</button>
+  <footer class="composer">
+    <div class="bar" id="editBar" hidden><span>Mengedit pesan</span><button type="button" id="editCancel">Batal</button></div>
+    <div class="bar" id="preview" hidden><img alt="Gambar yang akan dikirim"><button type="button" id="previewCancel">Hapus gambar</button></div>
+    <div class="inputrow">
+      <textarea id="input" rows="1" maxlength="2000" placeholder="Tulis pesan, atau tempel gambar (Ctrl+V)" aria-label="Pesan"></textarea>
+      <button class="btn" id="send" type="button">Kirim</button>
+    </div>
+  </footer>
+</section>
+
+<!-- Panel tema -->
+<div class="sheet" id="themePanel" role="dialog" aria-modal="true" aria-labelledby="themeTitle" hidden>
+  <div>
+    <h2 id="themeTitle">Tema obrolan</h2>
+    <h3>Pilihan siap pakai</h3>
+    <div class="presets" id="presets"></div>
+    <h3>Warna sendiri</h3>
+    <div class="colors">
+      <label>Latar<input type="color" id="cBg"></label>
+      <label>Pesanku<input type="color" id="cMine"></label>
+      <label>Pesan teman<input type="color" id="cTheirs"></label>
+    </div>
+    <h3>Ukuran huruf</h3>
+    <input type="range" id="fs" min="14" max="21" step="1" aria-label="Ukuran huruf">
+    <label class="check"><input type="checkbox" id="pat"> Motif di latar</label>
+    <div class="demo" aria-hidden="true">
+      <div class="msg theirs"><div class="bubble"><div class="who">Sari</div><div class="txt">Jadi kumpul jam berapa?</div></div></div>
+      <div class="msg mine"><div class="bubble"><div class="txt">Habis maghrib ya.</div></div></div>
+    </div>
+    <div class="row" style="margin-top:18px">
+      <button class="btn" id="themeAll" type="button">Simpan untuk semua</button>
+      <button class="btn ghost" id="themeMe" type="button">Simpan untukku saja</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn ghost" id="themeReset" type="button">Kembali ke bawaan</button>
+      <button class="btn ghost" id="themeClose" type="button">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<div id="menu" role="menu" hidden></div>
+<div id="lightbox" hidden><img alt="Gambar"></div>
+<div id="toast" role="status" hidden></div>
+
+<script>
+/*PURE-START*/
+const isHex = s => typeof s === 'string' && /^#[0-9a-f]{6}$/i.test(s);
+const h2r = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const r2h = a => '#' + a.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+const mix = (a, b, t) => { const x = h2r(a), y = h2r(b); return r2h(x.map((v, i) => v * (1 - t) + y[i] * t)); };
+const lum = h => { const [r, g, b] = h2r(h).map(v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); }); return .2126 * r + .7152 * g + .0722 * b; };
+const readable = h => lum(h) > .179 ? '#15171f' : '#f8f7f3';
+
+const PRESETS = {
+  wedel:  { bg: '#1c2450', mine: '#f0b53e', theirs: '#2c386e' },
+  awan:   { bg: '#e8edf6', mine: '#2a4fd6', theirs: '#ffffff' },
+  hutan:  { bg: '#12261f', mine: '#7fd3a0', theirs: '#1f3c32' },
+  sakura: { bg: '#fbe6ec', mine: '#c92a62', theirs: '#ffffff' },
+  senja:  { bg: '#2a1630', mine: '#ff8a5c', theirs: '#43244a' }
+};
+const DEFAULT_THEME = Object.assign({}, PRESETS.wedel, { fs: 16, pattern: true });
+
+function sanitizeTheme(t) {
+  t = t && typeof t === 'object' ? t : {};
+  const fs = Number(t.fs);
+  return {
+    bg: isHex(t.bg) ? t.bg : DEFAULT_THEME.bg,
+    mine: isHex(t.mine) ? t.mine : DEFAULT_THEME.mine,
+    theirs: isHex(t.theirs) ? t.theirs : DEFAULT_THEME.theirs,
+    fs: fs >= 13 && fs <= 22 ? Math.round(fs) : DEFAULT_THEME.fs,
+    pattern: t.pattern === false ? false : true
+  };
+}
+
+// Pohon data dari stream Firebase (event "put" dan "patch")
+function setAt(root, segs, val) {
+  if (!segs.length) return val;
+  let cur = root;
+  for (let i = 0; i < segs.length - 1; i++) {
+    const k = segs[i];
+    if (cur[k] == null || typeof cur[k] !== 'object') cur[k] = {};
+    cur = cur[k];
+  }
+  const last = segs[segs.length - 1];
+  if (val === null || val === undefined) delete cur[last]; else cur[last] = val;
+  return root;
+}
+function putInto(tree, path, data) {
+  const segs = String(path).split('/').filter(Boolean);
+  if (!segs.length) return data && typeof data === 'object' ? data : {};
+  return setAt(tree && typeof tree === 'object' ? tree : {}, segs, data);
+}
+function patchInto(tree, path, data) {
+  const base = String(path).replace(/\/+$/, '');
+  for (const [k, v] of Object.entries(data || {})) tree = putInto(tree, base + '/' + k, v);
+  return tree;
+}
+
+const normRoom = s => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+async function deriveKey(room, pass) {
+  const enc = new TextEncoder();
+  const base = await crypto.subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: enc.encode('ngobrol/v1/' + normRoom(room)), iterations: 150000, hash: 'SHA-256' }, base, 160);
+  return Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+function normDb(u) {
+  try {
+    const x = new URL(String(u || '').trim());
+    return x.protocol === 'https:' ? x.origin : '';
+  } catch { return ''; }
+}
+/*PURE-END*/
+
+(() => {
+'use strict';
+
+const DEFAULT_DB_URL = ''; // opsional: isi alamat database di sini kalau mau ditanam di file
+
+const RULES = `{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "rooms": {
+      "$room": {
+        ".read": true,
+        ".write": true,
+        "messages": {
+          "$msg": {
+            "u":    { ".validate": "newData.isString() && newData.val().length <= 40" },
+            "text": { ".validate": "newData.isString() && newData.val().length <= 2000" }
+          }
+        }
+      }
+    },
+    "imgs": {
+      "$room": {
+        ".read": true,
+        "$img": {
+          ".write": true,
+          ".validate": "newData.isString() && newData.val().length <= 800000"
+        }
+      }
+    }
+  }
+}`;
+
+const $ = s => document.querySelector(s);
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+const LS = {
+  get(k, d = null) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  del(k) { try { localStorage.removeItem(k); } catch {} }
+};
+
+const S = { db: '', cid: '', user: '', key: '', tree: {}, es: null, pending: null, editing: null, sending: false, forceScroll: false, lastCount: 0 };
+const imgCache = new Map();
+const nodes = new Map();      // elemen pesan yang sudah digambar
+let draft = null;             // tema yang sedang diedit
+
+class AppError extends Error { constructor(code, msg) { super(msg); this.code = code; } }
+
+/* ---------- util tampilan ---------- */
+function show(id) {
+  for (const v of ['v-setup', 'v-login', 'v-chat']) $('#' + v).hidden = v !== id;
+  window.scrollTo(0, 0);
+}
+let toastTimer;
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3200);
+}
+function note(box, msg, isErr) {
+  box.hidden = !msg; box.textContent = msg || '';
+  box.classList.toggle('err', !!isErr);
+}
+async function copyText(text, okMsg) {
+  try { await navigator.clipboard.writeText(text); toast(okMsg); }
+  catch { window.prompt('Salin teks ini:', text); }
+}
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+/* ---------- tema ---------- */
+function applyTheme(t) {
+  t = sanitizeTheme(t);
+  const ink = readable(t.bg), r = document.documentElement.style;
+  r.setProperty('--bg', t.bg); r.setProperty('--ink', ink);
+  r.setProperty('--bg2', mix(t.bg, ink, .08)); r.setProperty('--line', mix(t.bg, ink, .18));
+  r.setProperty('--muted', mix(ink, t.bg, .42)); r.setProperty('--pat', mix(t.bg, ink, .10));
+  r.setProperty('--mine', t.mine); r.setProperty('--mine-ink', readable(t.mine));
+  r.setProperty('--theirs', t.theirs); r.setProperty('--theirs-ink', readable(t.theirs));
+  r.setProperty('--fs', t.fs + 'px'); r.setProperty('--pat-op', t.pattern ? 1 : 0);
+  const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = t.bg;
+}
+function effectiveTheme() {
+  const local = S.key && LS.get('ngobrol.theme.' + S.key);
+  if (local) return sanitizeTheme(local);
+  const shared = S.tree.meta && S.tree.meta.theme;
+  return shared ? sanitizeTheme(shared) : DEFAULT_THEME;
+}
+function refreshTheme() { if (!draft) applyTheme(effectiveTheme()); }
+
+function buildThemeUI() {
+  const box = $('#presets'); box.textContent = '';
+  for (const [name, p] of Object.entries(PRESETS)) {
+    const b = el('button', 'preset'); b.type = 'button'; b.setAttribute('aria-label', 'Tema ' + name);
+    for (const c of [p.bg, p.theirs, p.mine]) { const s = el('span'); s.style.background = c; b.append(s); }
+    b.setAttribute('aria-pressed', String(draft.bg === p.bg && draft.mine === p.mine && draft.theirs === p.theirs));
+    b.onclick = () => { Object.assign(draft, p); syncThemeInputs(); applyTheme(draft); };
+    box.append(b);
+  }
+  syncThemeInputs();
+}
+function syncThemeInputs() {
+  $('#cBg').value = draft.bg; $('#cMine').value = draft.mine; $('#cTheirs').value = draft.theirs;
+  $('#fs').value = draft.fs; $('#pat').checked = draft.pattern;
+  for (const b of $('#presets').children) {
+    const i = [...$('#presets').children].indexOf(b), p = Object.values(PRESETS)[i];
+    b.setAttribute('aria-pressed', String(draft.bg === p.bg && draft.mine === p.mine && draft.theirs === p.theirs));
+  }
+}
+function openTheme() { draft = Object.assign({}, effectiveTheme()); buildThemeUI(); $('#themePanel').hidden = false; applyTheme(draft); }
+function closeTheme() { $('#themePanel').hidden = true; draft = null; applyTheme(effectiveTheme()); }
+
+/* ---------- Firebase lewat REST ---------- */
+async function rest(method, path, body) {
+  let r;
+  try {
+    r = await fetch(`${S.db}/${path}.json`, { method, body: body === undefined ? undefined : JSON.stringify(body) });
+  } catch {
+    throw new AppError('net', 'Tidak bisa terhubung ke database. Periksa alamat database dan koneksi internetmu.');
+  }
+  if (r.status === 401 || r.status === 403) throw new AppError('rules', 'Database menolak akses. Pasang Rules seperti di panduan, lalu coba lagi.');
+  if (r.status === 404) throw new AppError('url', 'Alamat database tidak ditemukan. Periksa lagi alamatnya.');
+  if (!r.ok) throw new AppError('http', 'Database mengembalikan error ' + r.status + '.');
+  return r.json();
+}
+function loadImg(id) {
+  if (!imgCache.has(id)) {
+    imgCache.set(id, rest('GET', `imgs/${S.key}/${id}`)
+      .then(v => (typeof v === 'string' && v.startsWith('data:image/') ? v : null))
+      .catch(() => { imgCache.delete(id); return null; }));
+  }
+  return imgCache.get(id);
+}
+
+/* ---------- stream waktu nyata ---------- */
+function setStatus(kind, text) {
+  const s = $('#status'); s.className = 'status ' + kind; s.lastElementChild.textContent = text;
+}
+function connect() {
+  if (S.es) S.es.close();
+  setStatus('', 'Menyambung…');
+  const es = new EventSource(`${S.db}/rooms/${S.key}.json`);
+  S.es = es;
+  es.addEventListener('open', () => setStatus('on', 'Tersambung'));
+  es.addEventListener('put', e => { const d = JSON.parse(e.data); S.tree = putInto(S.tree, d.path, d.data); onTree(); });
+  es.addEventListener('patch', e => { const d = JSON.parse(e.data); S.tree = patchInto(S.tree, d.path, d.data); onTree(); });
+  es.addEventListener('cancel', () => { setStatus('off', 'Akses ditolak'); });
+  es.addEventListener('auth_revoked', () => { setStatus('off', 'Akses ditolak'); });
+  es.onerror = () => { setStatus(es.readyState === EventSource.CLOSED ? 'off' : '', es.readyState === EventSource.CLOSED ? 'Terputus' : 'Menyambung ulang…'); };
+}
+let renderQueued = false;
+function onTree() {
+  if (renderQueued) return; renderQueued = true;
+  requestAnimationFrame(() => { renderQueued = false; refreshTheme(); renderMessages(); });
+}
+
+/* ---------- pesan ---------- */
+function linkify(parent, text) {
+  const parts = text.split(/(https?:\/\/[^\s<]+)/g);
+  parts.forEach((p, i) => {
+    if (i % 2) { const a = el('a', null, p); a.href = p; a.target = '_blank'; a.rel = 'noopener noreferrer'; parent.append(a); }
+    else if (p) parent.append(document.createTextNode(p));
+  });
+}
+const timeStr = t => t ? new Date(t).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '';
+function dayLabel(t) {
+  const d = new Date(t), today = new Date(), y = new Date(); y.setDate(today.getDate() - 1);
+  const same = (a, b) => a.toDateString() === b.toDateString();
+  if (same(d, today)) return 'Hari ini';
+  if (same(d, y)) return 'Kemarin';
+  return d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+const isOwner = () => !!(S.tree.meta && S.tree.meta.owner === S.cid);
+
+function buildMsg(m, showName) {
+  const mine = m.c === S.cid;
+  const row = el('div', 'msg ' + (mine ? 'mine' : 'theirs'));
+  const b = el('div', 'bubble'); row.append(b);
+  if (!mine && showName) b.append(el('div', 'who', m.u || '?'));
+  if (m.hasImg) {
+    const wrap = el('div', 'imgwrap'), img = document.createElement('img');
+    img.alt = 'Gambar dari ' + (m.u || 'teman');
+    if (m.w > 0 && m.h > 0) wrap.style.aspectRatio = Math.min(2.2, Math.max(.6, m.w / m.h)).toFixed(3);
+    wrap.append(img); b.append(wrap);
+    loadImg(m.id).then(u => { if (u) { img.src = u; wrap.classList.add('ok'); } else wrap.classList.add('fail'); });
+    wrap.onclick = () => { if (img.src) openLightbox(img.src); };
+  }
+  if (m.text) { const p = el('div', 'txt'); linkify(p, m.text); b.append(p); }
+  const meta = el('div', 'meta'); meta.append(el('span', null, timeStr(m.t)));
+  if (m.edited) meta.append(el('span', null, 'diedit'));
+  b.append(meta);
+  if (mine || isOwner()) {
+    const btn = el('button', 'more', '⋯'); btn.type = 'button'; btn.setAttribute('aria-label', 'Opsi pesan');
+    btn.onclick = e => { e.stopPropagation(); openMenu(btn, m, mine); };
+    b.append(btn);
+  }
+  return row;
+}
+
+function reconcile(list, map, items) {
+  const seen = new Set();
+  let cursor = list.firstElementChild;
+  for (const it of items) {
+    seen.add(it.key);
+    let node = map.get(it.key);
+    if (node && node._sig !== it.sig) {
+      const n = it.build(); n._sig = it.sig;
+      if (cursor === node) cursor = node.nextElementSibling;
+      node.replaceWith(n); map.set(it.key, n); node = n;
+    } else if (!node) {
+      node = it.build(); node._sig = it.sig; map.set(it.key, node);
+    }
+    if (node === cursor) cursor = cursor.nextElementSibling;
+    else list.insertBefore(node, cursor);
+  }
+  for (const [k, n] of map) if (!seen.has(k)) { n.remove(); map.delete(k); }
+}
+
+function renderMessages() {
+  const log = $('#log');
+  if (S.tree.meta && S.tree.meta.name) $('#roomTitle').textContent = S.tree.meta.name;
+  const raw = (S.tree.messages && typeof S.tree.messages === 'object') ? S.tree.messages : {};
+  const msgs = Object.entries(raw)
+    .filter(([, m]) => m && typeof m === 'object' && typeof m.u === 'string')
+    .map(([id, m]) => Object.assign({ id }, m))
+    .sort((a, b) => (a.t || 0) - (b.t || 0) || (a.id < b.id ? -1 : 1));
+
+  const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 140;
+  const owner = isOwner();
+  const items = [];
+  let prev = null, lastDay = '';
+  for (const m of msgs) {
+    const day = m.t ? new Date(m.t).toDateString() : '';
+    if (day && day !== lastDay) { items.push({ key: 'd:' + day, sig: day, build: () => el('div', 'sep', dayLabel(m.t)) }); lastDay = day; prev = null; }
+    const showName = !prev || prev.c !== m.c || prev.u !== m.u || (m.t - prev.t) > 300000;
+    const sig = JSON.stringify([m.u, m.c === S.cid, m.text, m.edited, m.t, m.hasImg, m.w, m.h, showName, owner]);
+    items.push({ key: 'm:' + m.id, sig, build: () => buildMsg(m, showName) });
+    prev = m;
+  }
+  let emptyEl = log.querySelector('.empty');
+  if (!msgs.length) {
+    if (!emptyEl) { emptyEl = el('div', 'empty', 'Belum ada pesan. Tulis yang pertama, atau tempel gambar.'); log.append(emptyEl); }
+  } else if (emptyEl) emptyEl.remove();
+  reconcile(log, nodes, items);
+
+  const mineLast = msgs.length && msgs[msgs.length - 1].c === S.cid;
+  if (S.forceScroll || nearBottom || mineLast && msgs.length > S.lastCount) {
+    log.scrollTop = log.scrollHeight; $('#newPill').hidden = true;
+  } else if (msgs.length > S.lastCount && S.lastCount) {
+    $('#newPill').hidden = false;
+  }
+  S.lastCount = msgs.length; S.forceScroll = false;
+}
+
+/* ---------- menu pesan, edit, hapus ---------- */
+function closeMenu() { $('#menu').hidden = true; }
+function openMenu(btn, m, mine) {
+  const menu = $('#menu'); menu.textContent = '';
+  if (mine) {
+    const e = el('button', null, 'Edit pesan'); e.type = 'button'; e.setAttribute('role', 'menuitem');
+    e.onclick = () => { closeMenu(); startEdit(m); };
+    menu.append(e);
+  }
+  const d = el('button', 'danger', 'Hapus pesan'); d.type = 'button'; d.setAttribute('role', 'menuitem');
+  d.onclick = async ev => {
+    ev.stopPropagation();
+    if (d.dataset.sure !== '1') { d.dataset.sure = '1'; d.textContent = 'Yakin hapus?'; return; }
+    closeMenu();
+    try {
+      await rest('DELETE', `rooms/${S.key}/messages/${m.id}`);
+      if (m.hasImg) { rest('DELETE', `imgs/${S.key}/${m.id}`).catch(() => {}); imgCache.delete(m.id); }
+      toast('Pesan dihapus');
+    } catch (err) { toast(err.message); }
+  };
+  menu.append(d);
+  menu.hidden = false;
+  const r = btn.getBoundingClientRect(), w = menu.offsetWidth, h = menu.offsetHeight;
+  menu.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left - w + r.width)) + 'px';
+  menu.style.top = Math.max(8, Math.min(innerHeight - h - 8, r.bottom + 4)) + 'px';
+}
+function startEdit(m) {
+  S.editing = m.id; clearPending();
+  const input = $('#input'); input.value = m.text || ''; autosize(); input.focus();
+  $('#editBar').hidden = false; $('#send').textContent = 'Simpan';
+}
+function stopEdit() {
+  S.editing = null; $('#editBar').hidden = true; $('#send').textContent = 'Kirim';
+  $('#input').value = ''; autosize();
+}
+
+/* ---------- gambar: hanya lewat tempel ---------- */
+async function compress(file) {
+  const bmp = await createImageBitmap(file);
+  let scale = Math.min(1, 1280 / Math.max(bmp.width, bmp.height));
+  for (let round = 0; round < 4; round++) {
+    const w = Math.max(1, Math.round(bmp.width * scale)), h = Math.max(1, Math.round(bmp.height * scale));
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, w, h); x.drawImage(bmp, 0, 0, w, h);
+    for (const q of [.8, .7, .6, .5]) {
+      const url = c.toDataURL('image/jpeg', q);
+      if (url.length < 450000) return { url, w, h };
+    }
+    scale *= .75;
+  }
+  throw new Error('Gambar terlalu besar untuk dikirim.');
+}
+async function attachImage(file) {
+  try {
+    toast('Menyiapkan gambar…');
+    S.pending = await compress(file);
+    $('#preview img').src = S.pending.url; $('#preview').hidden = false; $('#toast').hidden = true;
+    $('#input').focus();
+  } catch (e) { toast(e.message || 'Gambar tidak bisa dibaca.'); }
+}
+function clearPending() { S.pending = null; $('#preview').hidden = true; $('#preview img').removeAttribute('src'); }
+function openLightbox(src) { $('#lightbox img').src = src; $('#lightbox').hidden = false; }
+
+/* ---------- kirim ---------- */
+function autosize() { const i = $('#input'); i.style.height = 'auto'; i.style.height = Math.min(140, i.scrollHeight) + 'px'; }
+async function send() {
+  if (S.sending) return;
+  const input = $('#input'), text = input.value.trim();
+  if (S.editing) {
+    const m = (S.tree.messages || {})[S.editing];
+    if (!m) { stopEdit(); toast('Pesan itu sudah tidak ada.'); return; }
+    if (!text && !m.hasImg) { toast('Pesan kosong. Pakai Hapus kalau ingin menghilangkannya.'); return; }
+    S.sending = true;
+    try {
+      if (text) await rest('PATCH', `rooms/${S.key}/messages/${S.editing}`, { text, edited: true });
+      else { await rest('DELETE', `rooms/${S.key}/messages/${S.editing}/text`); await rest('PATCH', `rooms/${S.key}/messages/${S.editing}`, { edited: true }); }
+      stopEdit();
+    } catch (e) { toast(e.message); } finally { S.sending = false; }
+    return;
+  }
+  if (!text && !S.pending) return;
+  S.sending = true; $('#send').disabled = true;
+  try {
+    const id = newId(), body = { u: S.user, c: S.cid, t: { '.sv': 'timestamp' } };
+    if (text) body.text = text;
+    if (S.pending) {
+      await rest('PUT', `imgs/${S.key}/${id}`, S.pending.url);
+      Object.assign(body, { hasImg: true, w: S.pending.w, h: S.pending.h });
+      imgCache.set(id, Promise.resolve(S.pending.url));
+    }
+    await rest('PUT', `rooms/${S.key}/messages/${id}`, body);
+    input.value = ''; clearPending(); autosize(); S.forceScroll = true;
+  } catch (e) { toast(e.message); }
+  finally { S.sending = false; $('#send').disabled = false; input.focus(); }
+}
+
+/* ---------- masuk dan keluar ---------- */
+function showSetup() { $('#rulesBox').textContent = RULES; show('v-setup'); }
+function showLogin() {
+  $('#dbShown').textContent = S.db;
+  $('#user').value = LS.get('ngobrol.user', '') || '';
+  note($('#loginMsg'), '');
+  applyTheme(DEFAULT_THEME);
+  show('v-login');
+}
+function inviteLink() { return location.origin + location.pathname + '#db=' + encodeURIComponent(S.db); }
+
+async function enter(create) {
+  const roomRaw = $('#room').value.trim(), pass = $('#pass').value;
+  const user = $('#user').value.trim().replace(/\s+/g, ' ').slice(0, 24);
+  const msg = $('#loginMsg');
+  if (!roomRaw || !pass || !user) { note(msg, 'Isi nama room, password, dan namamu.', true); return; }
+  const btn = $('#loginBtn'); btn.disabled = true; btn.textContent = 'Memeriksa…';
+  try {
+    const key = await deriveKey(roomRaw, pass);
+    S.key = key;
+    let meta = await rest('GET', `rooms/${key}/meta`);
+    if (!meta) {
+      if (!create) {
+        msg.hidden = false; msg.classList.remove('err'); msg.textContent = '';
+        msg.append(el('p', null, 'Room ini belum ada, atau passwordnya salah.'));
+        const mk = el('button', 'btn ghost', 'Buat room baru dengan nama dan password ini'); mk.type = 'button';
+        mk.onclick = () => enter(true); msg.append(mk);
+        return;
+      }
+      await rest('PUT', `rooms/${key}/meta`, { name: roomRaw.slice(0, 40), owner: S.cid, created: { '.sv': 'timestamp' } });
+    }
+    S.user = user; LS.set('ngobrol.user', user); LS.set('ngobrol.session', { key, user });
+    $('#pass').value = '';
+    openChat();
+  } catch (e) { note(msg, e.message || 'Gagal masuk.', true); }
+  finally { btn.disabled = false; btn.textContent = 'Masuk'; }
+}
+function openChat() {
+  S.tree = {}; S.lastCount = 0; nodes.clear(); $('#log').textContent = '';
+  $('#roomTitle').textContent = 'Memuat…';
+  stopEditSilently(); clearPending();
+  show('v-chat'); connect();
+  $('#input').focus();
+}
+function stopEditSilently() { S.editing = null; $('#editBar').hidden = true; $('#send').textContent = 'Kirim'; $('#input').value = ''; }
+function leave() {
+  if (S.es) S.es.close(); S.es = null;
+  LS.del('ngobrol.session'); S.key = ''; S.tree = {}; imgCache.clear();
+  showLogin();
+}
+
+/* ---------- pasang event ---------- */
+function boot() {
+  let cid = LS.get('ngobrol.cid');
+  if (!cid) { cid = Array.from(crypto.getRandomValues(new Uint8Array(12))).map(b => b.toString(16).padStart(2, '0')).join(''); LS.set('ngobrol.cid', cid); }
+  S.cid = cid;
+
+  const m = location.hash.match(/db=([^&]+)/);
+  if (m) {
+    const u = normDb(decodeURIComponent(m[1]));
+    if (u) LS.set('ngobrol.db', u);
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+  S.db = normDb(LS.get('ngobrol.db') || DEFAULT_DB_URL);
+
+  $('#setupForm').onsubmit = e => {
+    e.preventDefault();
+    const u = normDb($('#dbUrl').value);
+    if (!u) { note($('#setupErr'), 'Alamat harus diawali https:// dan tersalin utuh dari tab Data.', true); return; }
+    S.db = u; LS.set('ngobrol.db', u); showLogin();
+  };
+  $('#copyRules').onclick = () => copyText(RULES, 'Aturan tersalin');
+  $('#loginForm').onsubmit = e => { e.preventDefault(); enter(false); };
+  $('#copyInvite').onclick = () => copyText(inviteLink(), 'Tautan tersalin');
+  $('#resetDb').onclick = () => { LS.del('ngobrol.db'); LS.del('ngobrol.session'); S.db = ''; showSetup(); };
+
+  $('#btnInvite').onclick = () => copyText(inviteLink(), 'Tautan tersalin. Kirim nama room dan passwordnya secara terpisah.');
+  $('#btnLeave').onclick = leave;
+  $('#btnTheme').onclick = openTheme;
+  $('#send').onclick = send;
+  $('#editCancel').onclick = stopEdit;
+  $('#previewCancel').onclick = clearPending;
+  $('#newPill').onclick = () => { const l = $('#log'); l.scrollTop = l.scrollHeight; $('#newPill').hidden = true; };
+  $('#log').addEventListener('scroll', () => { const l = $('#log'); if (l.scrollHeight - l.scrollTop - l.clientHeight < 140) $('#newPill').hidden = true; });
+
+  const input = $('#input');
+  input.addEventListener('input', autosize);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey && matchMedia('(pointer:fine)').matches) { e.preventDefault(); send(); }
+    if (e.key === 'Escape' && S.editing) stopEdit();
+  });
+  document.addEventListener('paste', e => {
+    if ($('#v-chat').hidden) return;
+    const item = [...(e.clipboardData ? e.clipboardData.items : [])].find(i => i.kind === 'file' && i.type.startsWith('image/'));
+    if (!item) return;
+    e.preventDefault(); attachImage(item.getAsFile());
+  });
+
+  document.addEventListener('click', e => { if (!$('#menu').contains(e.target)) closeMenu(); });
+  $('#log').addEventListener('scroll', closeMenu, { passive: true });
+  $('#lightbox').onclick = () => { $('#lightbox').hidden = true; };
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (!$('#lightbox').hidden) $('#lightbox').hidden = true;
+    else if (!$('#themePanel').hidden) closeTheme();
+    else closeMenu();
+  });
+
+  // tema
+  $('#cBg').oninput = e => { draft.bg = e.target.value; applyTheme(draft); syncThemeInputs(); };
+  $('#cMine').oninput = e => { draft.mine = e.target.value; applyTheme(draft); syncThemeInputs(); };
+  $('#cTheirs').oninput = e => { draft.theirs = e.target.value; applyTheme(draft); syncThemeInputs(); };
+  $('#fs').oninput = e => { draft.fs = Number(e.target.value); applyTheme(draft); };
+  $('#pat').onchange = e => { draft.pattern = e.target.checked; applyTheme(draft); };
+  $('#themeClose').onclick = closeTheme;
+  $('#themePanel').addEventListener('click', e => { if (e.target === $('#themePanel')) closeTheme(); });
+  $('#themeReset').onclick = () => { LS.del('ngobrol.theme.' + S.key); draft = Object.assign({}, (S.tree.meta && S.tree.meta.theme) ? sanitizeTheme(S.tree.meta.theme) : DEFAULT_THEME); buildThemeUI(); applyTheme(draft); toast('Tema pribadi dihapus'); };
+  $('#themeMe').onclick = () => { LS.set('ngobrol.theme.' + S.key, sanitizeTheme(draft)); closeTheme(); toast('Tema disimpan untukmu'); };
+  $('#themeAll').onclick = async () => {
+    const t = sanitizeTheme(draft);
+    try {
+      await rest('PUT', `rooms/${S.key}/meta/theme`, t);
+      LS.del('ngobrol.theme.' + S.key);
+      S.tree = putInto(S.tree, '/meta/theme', t);
+      closeTheme(); toast('Tema disimpan untuk semua');
+    } catch (e) { toast(e.message); }
+  };
+
+  // mulai
+  if (!S.db) { showSetup(); return; }
+  const sess = LS.get('ngobrol.session');
+  if (sess && sess.key && sess.user) {
+    S.key = sess.key; S.user = sess.user;
+    rest('GET', `rooms/${S.key}/meta`).then(meta => {
+      if (meta) openChat(); else { leave(); toast('Room itu sudah tidak ada.'); }
+    }).catch(() => { leave(); });
+  } else showLogin();
+}
+boot();
+})();
+</script>
+</body>
+</html>
