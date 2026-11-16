@@ -754,7 +754,7 @@ async function send() {
       imgCache.set(id, Promise.resolve(sent.url));
     }
     await rest('PUT', `rooms/${S.key}/messages/${id}`, body);
-    if (sent && sent.sticker && sent.url) addSticker(sent, true);
+    if (sent && sent.sticker) addSticker(sent, true);
     input.value = ''; clearPending(); clearReply(); autosize(); S.forceScroll = true;
   } catch (e) { toast(e.message); }
   finally { S.sending = false; $('#send').disabled = false; input.focus(); }
@@ -778,10 +778,10 @@ function jumpTo(id) {
 /* ---------- emoji dan stiker ---------- */
 const STK_KEY = 'ngobrol.stickers';
 let pickTab = Object.keys(EMOJI)[0];
-const getStickers = () => { const v = LS.get(STK_KEY, []); return Array.isArray(v) ? v.filter(x => x && typeof x.url === 'string') : []; };
+const getStickers = () => { const v = LS.get(STK_KEY, []); return Array.isArray(v) ? v.filter(x => x && (typeof x.url === 'string' || typeof x.link === 'string')) : []; };
 function addSticker(st, quiet) {
-  const list = getStickers(); if (list.some(x => x.url === st.url)) return;
-  const next = [{ url: st.url, w: st.w, h: st.h }].concat(list).slice(0, 12);
+  const key = st.url || st.link, list = getStickers(); if (!key || list.some(x => (x.url || x.link) === key)) return;
+  const next = [st.link ? { link: st.link } : { url: st.url, w: st.w, h: st.h }].concat(list).slice(0, 40);
   while (next.length) { try { localStorage.setItem(STK_KEY, JSON.stringify(next)); return; } catch { next.pop(); } }
   if (!quiet) toast('Stiker terlalu besar untuk disimpan di browser.');
 }
@@ -829,10 +829,10 @@ function renderPick() {
   const add = el('button', null, '＋ GIF'); add.type = 'button'; add.style.fontSize = '.9em'; add.onclick = () => $('#gifIn').click(); grid.append(add);
   for (const st of getStickers()) {
     const b = el('button'); b.type = 'button'; b.setAttribute('aria-label', 'Kirim stiker');
-    const im = document.createElement('img'); im.src = st.url; im.alt = ''; b.append(im);
+    const im = document.createElement('img'); im.referrerPolicy = 'no-referrer'; im.src = st.url || st.link; im.alt = ''; b.append(im);
     b.onclick = () => sendSticker(st);
     const x = el('span', 'del', '×'); x.title = 'Hapus stiker';
-    x.onclick = ev => { ev.stopPropagation(); LS.set(STK_KEY, getStickers().filter(t => t.url !== st.url)); renderPick(); };
+    x.onclick = ev => { ev.stopPropagation(); LS.set(STK_KEY, getStickers().filter(t => (t.url || t.link) !== (st.url || st.link))); renderPick(); };
     b.append(x); grid.append(b);
   }
 }
