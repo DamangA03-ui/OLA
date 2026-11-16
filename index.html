@@ -104,6 +104,27 @@ pre{background:var(--bg2);border:1.5px solid var(--line);border-radius:12px;padd
 #input{flex:1;resize:none;max-height:140px;padding:11px 14px;border-radius:14px;border:1.5px solid var(--line);background:var(--bg);min-height:46px;line-height:1.35}
 #send{min-height:46px;padding:0 20px}
 
+.bar span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.quote{margin:0 0 5px;padding:4px 8px;border-left:3px solid currentColor;border-radius:6px;background:rgba(127,127,127,.2);font-size:.85em;cursor:pointer;max-width:100%}
+.quote b{display:block;font-weight:700;opacity:.9}
+.quote span{display:block;opacity:.8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.msg.flash .bubble{animation:flash 1.2s}
+@keyframes flash{0%,60%{box-shadow:0 0 0 3px var(--ink)}100%{box-shadow:0 0 0 3px transparent}}
+.bubble.stk{background:transparent !important;color:var(--ink) !important;padding:2px 4px}
+.imgwrap.sk{width:min(170px,44vw);aspect-ratio:auto;max-height:200px;background:transparent}
+.imgwrap.sk img{object-fit:contain;height:auto}
+.emo{min-height:46px;min-width:46px;padding:0;background:transparent;border:1.5px solid var(--line);border-radius:14px;font-size:1.3em}
+.pick{margin:0 0 8px;border:1px solid var(--line);border-radius:12px;background:var(--bg);overflow:hidden}
+.ptabs{display:flex;gap:4px;padding:6px;border-bottom:1px solid var(--line);overflow-x:auto}
+.ptabs button{min-width:40px;min-height:36px;padding:0 10px;border:0;border-radius:8px;background:transparent;font-size:1.05em;white-space:nowrap}
+.ptabs button[aria-pressed=true]{background:var(--line)}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(42px,1fr));gap:2px;padding:6px;max-height:200px;overflow-y:auto}
+.pgrid button{aspect-ratio:1;border:0;border-radius:8px;background:transparent;font-size:1.5em;padding:0;position:relative}
+.pgrid button:hover{background:var(--line)}
+.pgrid.stks{grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px}
+.pgrid img{width:100%;height:100%;object-fit:contain;display:block}
+.pgrid .del{position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;background:var(--bg2);border:1px solid var(--line);font-size:13px;line-height:18px;text-align:center}
+
 /* ---------- panel tema, menu, lightbox ---------- */
 .sheet{position:fixed;inset:0;z-index:20;display:flex;align-items:flex-end;justify-content:center;background:rgba(5,8,20,.5)}
 .sheet>div{width:min(560px,100%);max-height:92dvh;overflow:auto;background:var(--bg2);color:var(--ink);border:1.5px solid var(--line);border-radius:20px 20px 0 0;padding:20px 20px max(20px,env(safe-area-inset-bottom))}
@@ -212,8 +233,12 @@ pre{background:var(--bg2);border:1.5px solid var(--line);border-radius:12px;padd
   <footer class="composer">
     <div class="bar" id="editBar" hidden><span>Mengedit pesan</span><button type="button" id="editCancel">Batal</button></div>
     <div class="bar" id="preview" hidden><img alt="Gambar yang akan dikirim"><button type="button" id="previewCancel">Hapus gambar</button></div>
+    <div class="bar" id="replyBar" hidden><span id="replyTxt"></span><button type="button" id="replyCancel">Batal</button></div>
+    <div class="pick" id="pick" hidden><div class="ptabs" id="ptabs"></div><div class="pgrid" id="pgrid"></div></div>
+    <input type="file" id="gifIn" accept="image/*" hidden>
     <div class="inputrow">
-      <textarea id="input" rows="1" maxlength="2000" placeholder="Tulis pesan, atau tempel gambar (Ctrl+V)" aria-label="Pesan"></textarea>
+      <button class="emo" id="btnEmo" type="button" aria-label="Emoji dan stiker">😊</button>
+      <textarea id="input" rows="1" maxlength="2000" placeholder="Tulis pesan, tempel gambar atau GIF" aria-label="Pesan"></textarea>
       <button class="btn" id="send" type="button">Kirim</button>
     </div>
   </footer>
@@ -257,6 +282,9 @@ pre{background:var(--bg2);border:1.5px solid var(--line);border-radius:12px;padd
     <label class="check"><input type="checkbox" id="pNotif"> Notifikasi desktop saat ada pesan baru</label>
     <label class="check"><input type="checkbox" id="pSound"> Bunyi saat pesan masuk</label>
     <p class="hint" id="notifHint"></p>
+    <h3>Hapus otomatis</h3>
+    <label class="check"><input type="checkbox" id="pAuto"> Hapus semua pesan setiap pukul 18.00</label>
+    <p class="hint" id="autoHint"></p>
     <div id="dangerZone" hidden>
       <h3>Hapus pesan</h3>
       <p class="hint" style="margin:0 0 10px">Menghapus semua pesan dan gambar di room ini untuk semua orang. Tidak bisa dibatalkan.</p>
@@ -375,6 +403,16 @@ const RULES = `{
   }
 }`;
 
+const WIPE_HOUR = 18; // jam hapus otomatis, mengikuti jam perangkat
+const EMOJI = {
+  '😀': '😀 😃 😄 😁 😆 😅 😂 🤣 🥲 😊 😇 🙂 🙃 😉 😌 😍 🥰 😘 😋 😛 😜 🤪 😎 🤩 🥳 😏 😒 😞 😔 😟 😕 🙁 😣 😖 😫 😩 🥺 😢 😭 😤 😠 😡 🤬 🤯 😳 🥵 🥶 😱 😨 😰 😓 🤗 🤔 🤭 🤫 😶 😐 😑 😬 🙄 😯 😴 🤤 😷 🤒 🤕 🤢 🤮 🥴 😵 🤠 🤓 🧐',
+  '👍': '👍 👎 👌 ✌️ 🤞 🤟 🤘 🤙 👈 👉 👆 👇 ☝️ ✋ 🤚 👋 🤝 🙏 👏 🙌 👐 🤲 💪 ✍️ 🤳 🫶 🫡 🙈 🙉 🙊',
+  '❤️': '❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 ✨ 💫 ⭐ 🌟 🔥 💥 💯 ✅ ❌ ❓ ❗ 💤 💢 💦 🎉 🎊',
+  '🐶': '🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐮 🐷 🐸 🐵 🐔 🐧 🐦 🦆 🦉 🐺 🐴 🦄 🐝 🦋 🐌 🐢 🐍 🐙 🐠 🐬 🐳 🌸 🌹 🌻 🌴 🌈 ☀️ 🌙 ⛅ ☔ ⚡ ❄️',
+  '🍔': '🍎 🍌 🍉 🍇 🍓 🍒 🥭 🍍 🥑 🥕 🌽 🍞 🧀 🍳 🥓 🍔 🍟 🍕 🌭 🌮 🍜 🍝 🍣 🍚 🍛 🍢 🍡 🍦 🍩 🍪 🎂 🍫 🍿 ☕ 🍵 🧋 🥤 🍺',
+  '⚽': '⚽ 🏀 🏈 ⚾ 🎾 🏐 🏓 🏸 🎱 🥊 🎮 🎲 🎯 🎵 🎶 🎤 🎧 🎸 🎬 📷 📚 ✏️ 💻 📱 💡 🚗 🏍️ ✈️ 🚀 🏠 🎁 💰 🕌 ⏰'
+};
+
 const $ = s => document.querySelector(s);
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
@@ -384,7 +422,7 @@ const LS = {
   del(k) { try { localStorage.removeItem(k); } catch {} }
 };
 
-const S = { db: '', cid: '', user: '', key: '', tree: {}, es: null, pending: null, editing: null, sending: false, forceScroll: false, lastCount: 0, seen: new Set(), primed: false };
+const S = { db: '', cid: '', user: '', key: '', tree: {}, es: null, pending: null, editing: null, replyTo: null, sending: false, forceScroll: false, lastCount: 0, seen: new Set(), primed: false };
 const imgCache = new Map();
 const nodes = new Map();      // elemen pesan yang sudah digambar
 let draft = null;             // tema yang sedang diedit
@@ -495,7 +533,7 @@ let renderQueued = false;
 function onTree() {
   detectIncoming(); // langsung, tanpa timer, supaya tetap jalan saat jendela di latar belakang
   if (renderQueued) return; renderQueued = true;
-  setTimeout(() => { renderQueued = false; refreshTheme(); renderMessages(); }, 30);
+  setTimeout(() => { renderQueued = false; refreshTheme(); renderMessages(); sweep(); }, 30);
 }
 
 /* ---------- pesan ---------- */
@@ -519,12 +557,16 @@ const isOwner = () => !!(S.tree.meta && S.tree.meta.owner === S.cid);
 function buildMsg(m, showName) {
   const mine = m.c === S.cid;
   const row = el('div', 'msg ' + (mine ? 'mine' : 'theirs'));
-  const b = el('div', 'bubble'); row.append(b);
+  const b = el('div', 'bubble' + (m.s && !m.text ? ' stk' : '')); row.append(b);
   if (!mine && showName) b.append(el('div', 'who', m.u || '?'));
+  if (m.r && typeof m.r === 'object') {
+    const q = el('div', 'quote'); q.append(el('b', null, String(m.r.u || '?')), el('span', null, String(m.r.x || '')));
+    q.onclick = () => jumpTo(m.r.id); b.append(q);
+  }
   if (m.hasImg) {
-    const wrap = el('div', 'imgwrap'), img = document.createElement('img');
+    const wrap = el('div', 'imgwrap' + (m.s ? ' sk' : '')), img = document.createElement('img');
     img.alt = 'Gambar dari ' + (m.u || 'teman');
-    if (m.w > 0 && m.h > 0) wrap.style.aspectRatio = Math.min(2.2, Math.max(.6, m.w / m.h)).toFixed(3);
+    if (!m.s && m.w > 0 && m.h > 0) wrap.style.aspectRatio = Math.min(2.2, Math.max(.6, m.w / m.h)).toFixed(3);
     wrap.append(img); b.append(wrap);
     loadImg(m.id).then(u => { if (u) { img.src = u; wrap.classList.add('ok'); } else wrap.classList.add('fail'); });
     wrap.onclick = () => { if (img.src) openLightbox(img.src); };
@@ -533,7 +575,7 @@ function buildMsg(m, showName) {
   const meta = el('div', 'meta'); meta.append(el('span', null, timeStr(m.t)));
   if (m.edited) meta.append(el('span', null, 'diedit'));
   b.append(meta);
-  if (mine || isOwner()) {
+  {
     const btn = el('button', 'more', '⋯'); btn.type = 'button'; btn.setAttribute('aria-label', 'Opsi pesan');
     btn.onclick = e => { e.stopPropagation(); openMenu(btn, m, mine); };
     b.append(btn);
@@ -565,7 +607,7 @@ function renderMessages() {
   if (S.tree.meta && S.tree.meta.name) $('#roomTitle').textContent = S.tree.meta.name;
   const raw = (S.tree.messages && typeof S.tree.messages === 'object') ? S.tree.messages : {};
   const msgs = Object.entries(raw)
-    .filter(([, m]) => m && typeof m === 'object' && typeof m.u === 'string')
+    .filter(([, m]) => m && typeof m === 'object' && typeof m.u === 'string' && !isExpired(m))
     .map(([id, m]) => Object.assign({ id }, m))
     .sort((a, b) => (a.t || 0) - (b.t || 0) || (a.id < b.id ? -1 : 1));
 
@@ -577,7 +619,7 @@ function renderMessages() {
     const day = m.t ? new Date(m.t).toDateString() : '';
     if (day && day !== lastDay) { items.push({ key: 'd:' + day, sig: day, build: () => el('div', 'sep', dayLabel(m.t)) }); lastDay = day; prev = null; }
     const showName = !prev || prev.c !== m.c || prev.u !== m.u || (m.t - prev.t) > 300000;
-    const sig = JSON.stringify([m.u, m.c === S.cid, m.text, m.edited, m.t, m.hasImg, m.w, m.h, showName, owner]);
+    const sig = JSON.stringify([m.u, m.c === S.cid, m.text, m.edited, m.t, m.hasImg, m.w, m.h, m.s, m.r, showName, owner]);
     items.push({ key: 'm:' + m.id, sig, build: () => buildMsg(m, showName) });
     prev = m;
   }
@@ -600,6 +642,9 @@ function renderMessages() {
 function closeMenu() { $('#menu').hidden = true; }
 function openMenu(btn, m, mine) {
   const menu = $('#menu'); menu.textContent = '';
+  const rp = el('button', null, 'Balas'); rp.type = 'button'; rp.setAttribute('role', 'menuitem');
+  rp.onclick = () => { closeMenu(); startReply(m); };
+  menu.append(rp);
   if (mine) {
     const e = el('button', null, 'Edit pesan'); e.type = 'button'; e.setAttribute('role', 'menuitem');
     e.onclick = () => { closeMenu(); startEdit(m); };
@@ -616,14 +661,14 @@ function openMenu(btn, m, mine) {
       toast('Pesan dihapus');
     } catch (err) { toast(err.message); }
   };
-  menu.append(d);
+  if (mine || isOwner()) menu.append(d);
   menu.hidden = false;
   const r = btn.getBoundingClientRect(), w = menu.offsetWidth, h = menu.offsetHeight;
   menu.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left - w + r.width)) + 'px';
   menu.style.top = Math.max(8, Math.min(innerHeight - h - 8, r.bottom + 4)) + 'px';
 }
 function startEdit(m) {
-  S.editing = m.id; clearPending();
+  S.editing = m.id; clearPending(); clearReply();
   const input = $('#input'); input.value = m.text || ''; autosize(); input.focus();
   $('#editBar').hidden = false; $('#send').textContent = 'Simpan';
 }
@@ -651,8 +696,9 @@ async function compress(file) {
 async function attachImage(file) {
   try {
     toast('Menyiapkan gambar…');
-    S.pending = await compress(file);
-    $('#preview img').src = S.pending.url; $('#preview').hidden = false; $('#toast').hidden = true;
+    S.pending = file.type === 'image/gif' ? await toSticker(file) : await compress(file);
+    $('#preview img').src = S.pending.url; $('#preview').hidden = false;
+    if (S.pending.still) toast('GIF terlalu besar untuk tetap bergerak, jadi stiker diam.'); else $('#toast').hidden = true;
     $('#input').focus();
   } catch (e) { toast(e.message || 'Gambar tidak bisa dibaca.'); }
 }
@@ -681,15 +727,119 @@ async function send() {
   try {
     const id = newId(), body = { u: S.user, c: S.cid, t: { '.sv': 'timestamp' } };
     if (text) body.text = text;
-    if (S.pending) {
-      await rest('PUT', `imgs/${S.key}/${id}`, S.pending.url);
-      Object.assign(body, { hasImg: true, w: S.pending.w, h: S.pending.h });
-      imgCache.set(id, Promise.resolve(S.pending.url));
+    if (S.replyTo) body.r = S.replyTo;
+    const sent = S.pending;
+    if (sent) {
+      await rest('PUT', `imgs/${S.key}/${id}`, sent.url);
+      Object.assign(body, { hasImg: true, w: sent.w, h: sent.h });
+      if (sent.sticker) body.s = true;
+      imgCache.set(id, Promise.resolve(sent.url));
     }
     await rest('PUT', `rooms/${S.key}/messages/${id}`, body);
-    input.value = ''; clearPending(); autosize(); S.forceScroll = true;
+    if (sent && sent.sticker) addSticker(sent, true);
+    input.value = ''; clearPending(); clearReply(); autosize(); S.forceScroll = true;
   } catch (e) { toast(e.message); }
   finally { S.sending = false; $('#send').disabled = false; input.focus(); }
+}
+
+/* ---------- balas pesan ---------- */
+function startReply(m) {
+  if (S.editing) stopEdit();
+  S.replyTo = { id: m.id, u: String(m.u || '?').slice(0, 24), x: (m.text ? String(m.text) : m.s ? 'Stiker' : m.hasImg ? 'Gambar' : 'Pesan').slice(0, 90) };
+  $('#replyTxt').textContent = 'Membalas ' + S.replyTo.u + ': ' + S.replyTo.x;
+  $('#replyBar').hidden = false; $('#input').focus();
+}
+function clearReply() { S.replyTo = null; $('#replyBar').hidden = true; }
+function jumpTo(id) {
+  const n = nodes.get('m:' + id);
+  if (!n) { toast('Pesan asli sudah tidak ada.'); return; }
+  n.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  n.classList.remove('flash'); void n.offsetWidth; n.classList.add('flash');
+}
+
+/* ---------- emoji dan stiker ---------- */
+const STK_KEY = 'ngobrol.stickers';
+let pickTab = Object.keys(EMOJI)[0];
+const getStickers = () => { const v = LS.get(STK_KEY, []); return Array.isArray(v) ? v.filter(x => x && typeof x.url === 'string') : []; };
+function addSticker(st, quiet) {
+  const list = getStickers(); if (list.some(x => x.url === st.url)) return;
+  const next = [{ url: st.url, w: st.w, h: st.h }].concat(list).slice(0, 12);
+  while (next.length) { try { localStorage.setItem(STK_KEY, JSON.stringify(next)); return; } catch { next.pop(); } }
+  if (!quiet) toast('Stiker terlalu besar untuk disimpan di browser.');
+}
+const readURL = f => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = no; r.readAsDataURL(f); });
+// GIF kecil tetap bergerak; kalau melebihi batas database, jadi stiker diam (webp transparan)
+async function toSticker(file) {
+  const bmp = await createImageBitmap(file);
+  if (file.type === 'image/gif') {
+    const url = await readURL(file);
+    if (url.length <= 700000) return { url, w: bmp.width, h: bmp.height, sticker: true };
+  }
+  let scale = Math.min(1, 512 / Math.max(bmp.width, bmp.height));
+  for (let i = 0; i < 4; i++) {
+    const w = Math.max(1, Math.round(bmp.width * scale)), h = Math.max(1, Math.round(bmp.height * scale));
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    c.getContext('2d').drawImage(bmp, 0, 0, w, h);
+    const url = c.toDataURL('image/webp', .85);
+    if (url.length <= 700000) return { url, w, h, sticker: true, still: file.type === 'image/gif' };
+    scale *= .75;
+  }
+  throw new Error('Gambar terlalu besar untuk jadi stiker.');
+}
+function sendSticker(st) {
+  if (S.editing) { toast('Selesaikan edit pesan dulu.'); return; }
+  S.pending = Object.assign({ sticker: true }, st); $('#pick').hidden = true; send();
+}
+function insertEmoji(e) {
+  const i = $('#input'); if (i.value.length + e.length > i.maxLength) return;
+  const a = i.selectionStart == null ? i.value.length : i.selectionStart, b = i.selectionEnd == null ? a : i.selectionEnd;
+  i.setRangeText(e, a, b, 'end'); autosize();
+  if (matchMedia('(pointer:fine)').matches) i.focus();
+}
+function renderPick() {
+  const tabs = $('#ptabs'), grid = $('#pgrid'); tabs.textContent = ''; grid.textContent = '';
+  for (const k of [...Object.keys(EMOJI), 'stiker']) {
+    const b = el('button', null, k === 'stiker' ? 'Stiker' : k); b.type = 'button';
+    b.setAttribute('aria-pressed', String(k === pickTab)); b.onclick = () => { pickTab = k; renderPick(); };
+    tabs.append(b);
+  }
+  grid.classList.toggle('stks', pickTab === 'stiker');
+  if (pickTab !== 'stiker') {
+    for (const e of EMOJI[pickTab].split(' ')) { const b = el('button', null, e); b.type = 'button'; b.onclick = () => insertEmoji(e); grid.append(b); }
+    return;
+  }
+  const add = el('button', null, '＋ GIF'); add.type = 'button'; add.style.fontSize = '.9em'; add.onclick = () => $('#gifIn').click(); grid.append(add);
+  for (const st of getStickers()) {
+    const b = el('button'); b.type = 'button'; b.setAttribute('aria-label', 'Kirim stiker');
+    const im = document.createElement('img'); im.src = st.url; im.alt = ''; b.append(im);
+    b.onclick = () => sendSticker(st);
+    const x = el('span', 'del', '×'); x.title = 'Hapus stiker';
+    x.onclick = ev => { ev.stopPropagation(); LS.set(STK_KEY, getStickers().filter(t => t.url !== st.url)); renderPick(); };
+    b.append(x); grid.append(b);
+  }
+}
+
+/* ---------- hapus otomatis pukul 18.00 ---------- */
+let lastCut = 0, tickTimer = 0, sweeping = false;
+const autoOn = () => !!(S.tree.meta && S.tree.meta.autoWipe === true);
+function lastCutoff() { const d = new Date(); d.setHours(WIPE_HOUR, 0, 0, 0); if (d.getTime() > Date.now()) d.setDate(d.getDate() - 1); return d.getTime(); }
+const isExpired = m => autoOn() && typeof m.t === 'number' && m.t < lastCutoff();
+async function sweep() {
+  if (sweeping || !autoOn() || !S.key) return;
+  const cut = lastCutoff();
+  const old = Object.entries(S.tree.messages || {}).filter(([, m]) => m && typeof m.t === 'number' && m.t < cut);
+  if (!old.length) return;
+  sweeping = true;
+  try {
+    const upd = {}; old.forEach(([id]) => { upd[id] = null; });
+    await rest('PATCH', `rooms/${S.key}/messages`, upd);
+    for (const [id, m] of old) if (m.hasImg) { imgCache.delete(id); rest('DELETE', `imgs/${S.key}/${id}`).catch(() => {}); }
+  } catch {} finally { sweeping = false; }
+}
+function tick() {
+  if (!autoOn()) return;
+  const c = lastCutoff(); if (c !== lastCut) { lastCut = c; renderMessages(); }
+  sweep();
 }
 
 /* ---------- pemberitahuan ---------- */
@@ -766,6 +916,10 @@ function syncSettings() {
       ? 'Notifikasi diblokir di browser. Klik ikon gembok di kolom alamat, ubah Notifikasi menjadi Izinkan, lalu buka opsi ini lagi.'
       : 'Notifikasi hanya muncul saat jendela Ola tidak sedang dilihat. Judul tab menampilkan jumlah pesan yang belum dibaca.';
   $('#dangerZone').hidden = !isOwner();
+  $('#pAuto').checked = autoOn(); $('#pAuto').disabled = !isOwner();
+  $('#autoHint').textContent = isOwner()
+    ? 'Pesan sebelum pukul 18.00 (jam perangkat) disembunyikan dan dihapus dari database saat ada anggota yang membuka Ola.'
+    : 'Hanya pembuat room yang bisa mengubah ini.';
 }
 function openSettings() { resetWipe(); syncSettings(); $('#setPanel').hidden = false; }
 function closeSettings() { resetWipe(); $('#setPanel').hidden = true; }
@@ -830,11 +984,12 @@ function openChat() {
   nodes.clear(); $('#log').textContent = '';
   $('#roomTitle').textContent = 'Memuat…';
   stopEditSilently(); clearPending();
-  show('v-chat'); connect();
+  show('v-chat'); connect(); lastCut = 0; clearInterval(tickTimer); tickTimer = setInterval(tick, 20000);
   $('#input').focus();
 }
-function stopEditSilently() { S.editing = null; $('#editBar').hidden = true; $('#send').textContent = 'Kirim'; $('#input').value = ''; }
+function stopEditSilently() { clearReply(); S.editing = null; $('#editBar').hidden = true; $('#send').textContent = 'Kirim'; $('#input').value = ''; }
 function leave() {
+  clearInterval(tickTimer);
   if (S.es) S.es.close(); S.es = null;
   LS.del('ngobrol.session'); S.key = ''; S.tree = {}; imgCache.clear();
   S.seen = new Set(); S.primed = false; clearUnread(); closeSettings();
@@ -888,6 +1043,24 @@ function boot() {
   window.addEventListener('focus', clearUnread);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) clearUnread(); });
   $('#send').onclick = send;
+  $('#btnEmo').onclick = () => { const k = $('#pick'); k.hidden = !k.hidden; if (!k.hidden) renderPick(); };
+  $('#replyCancel').onclick = clearReply;
+  $('#gifIn').onchange = async e => {
+    const f = e.target.files[0]; e.target.value = '';
+    if (!f || !f.type.startsWith('image/')) return;
+    try {
+      toast('Membuat stiker…'); const st = await toSticker(f); addSticker(st); renderPick();
+      toast(st.still ? 'GIF terlalu besar untuk tetap bergerak, jadi stiker diam.' : 'Stiker ditambahkan');
+    } catch (err) { toast(err.message || 'Gagal membuat stiker.'); }
+  };
+  $('#pAuto').onchange = async e => {
+    const on = e.target.checked;
+    try {
+      await rest('PUT', `rooms/${S.key}/meta/autoWipe`, on);
+      S.tree = putInto(S.tree, '/meta/autoWipe', on); renderMessages(); if (on) sweep();
+      toast(on ? 'Hapus otomatis aktif pukul 18.00' : 'Hapus otomatis dimatikan');
+    } catch (err) { toast(err.message); e.target.checked = !on; }
+  };
   $('#editCancel').onclick = stopEdit;
   $('#previewCancel').onclick = clearPending;
   $('#newPill').onclick = () => { const l = $('#log'); l.scrollTop = l.scrollHeight; $('#newPill').hidden = true; };
