@@ -563,12 +563,15 @@ function buildMsg(m, showName) {
     const q = el('div', 'quote'); q.append(el('b', null, String(m.r.u || '?')), el('span', null, String(m.r.x || '')));
     q.onclick = () => jumpTo(m.r.id); b.append(q);
   }
-  if (m.hasImg) {
+  if (m.hasImg || m.g) {
     const wrap = el('div', 'imgwrap' + (m.s ? ' sk' : '')), img = document.createElement('img');
     img.alt = 'Gambar dari ' + (m.u || 'teman');
     if (!m.s && m.w > 0 && m.h > 0) wrap.style.aspectRatio = Math.min(2.2, Math.max(.6, m.w / m.h)).toFixed(3);
     wrap.append(img); b.append(wrap);
-    loadImg(m.id).then(u => { if (u) { img.src = u; wrap.classList.add('ok'); } else wrap.classList.add('fail'); });
+    if (m.g) {
+      img.referrerPolicy = 'no-referrer'; img.onload = () => wrap.classList.add('ok'); img.onerror = () => wrap.classList.add('fail');
+      if (/^https:\/\//.test(m.g)) img.src = String(m.g); else wrap.classList.add('fail');
+    } else loadImg(m.id).then(u => { if (u) { img.src = u; wrap.classList.add('ok'); } else wrap.classList.add('fail'); });
     wrap.onclick = () => { if (img.src) openLightbox(img.src); };
   }
   if (m.text) { const p = el('div', 'txt'); linkify(p, m.text); b.append(p); }
@@ -619,7 +622,7 @@ function renderMessages() {
     const day = m.t ? new Date(m.t).toDateString() : '';
     if (day && day !== lastDay) { items.push({ key: 'd:' + day, sig: day, build: () => el('div', 'sep', dayLabel(m.t)) }); lastDay = day; prev = null; }
     const showName = !prev || prev.c !== m.c || prev.u !== m.u || (m.t - prev.t) > 300000;
-    const sig = JSON.stringify([m.u, m.c === S.cid, m.text, m.edited, m.t, m.hasImg, m.w, m.h, m.s, m.r, showName, owner]);
+    const sig = JSON.stringify([m.u, m.c === S.cid, m.text, m.edited, m.t, m.hasImg, m.w, m.h, m.s, m.g, m.r, showName, owner]);
     items.push({ key: 'm:' + m.id, sig, build: () => buildMsg(m, showName) });
     prev = m;
   }
@@ -702,6 +705,20 @@ async function attachImage(file) {
     $('#input').focus();
   } catch (e) { toast(e.message || 'Gambar tidak bisa dibaca.'); }
 }
+// Link gambar/GIF (hasil "Salin alamat gambar") dikirim sebagai tautan, jadi tetap bergerak
+function imgLink(t) {
+  t = String(t || '').trim();
+  if (!/^https:\/\/\S+$/.test(t) || t.length > 600) return '';
+  const g = t.match(/^https:\/\/giphy\.com\/(?:gifs|stickers)\/(?:[^\/?#]*-)?([A-Za-z0-9]+)\/?(?:[?#].*)?$/);
+  if (g) return 'https://i.giphy.com/' + g[1] + '.gif';
+  return /\.(gif|png|jpe?g|webp|avif)(\?|#|$)/i.test(t) || /^https:\/\/(media\d*\.giphy\.com|i\.giphy\.com|media\d*\.tenor\.com|c\.tenor\.com)\//i.test(t) ? t : '';
+}
+function attachLink(url) {
+  S.pending = { link: url, sticker: true };
+  const im = $('#preview img'); im.referrerPolicy = 'no-referrer';
+  im.onerror = () => { if (S.pending && S.pending.link === url) { clearPending(); toast('Link gambar itu tidak bisa dimuat.'); } };
+  im.src = url; $('#preview').hidden = false; $('#input').focus();
+}
 function clearPending() { S.pending = null; $('#preview').hidden = true; $('#preview img').removeAttribute('src'); }
 function openLightbox(src) { $('#lightbox img').src = src; $('#lightbox').hidden = false; }
 
@@ -729,14 +746,15 @@ async function send() {
     if (text) body.text = text;
     if (S.replyTo) body.r = S.replyTo;
     const sent = S.pending;
-    if (sent) {
+    if (sent && sent.link) { body.s = true; body.g = sent.link; }
+    else if (sent) {
       await rest('PUT', `imgs/${S.key}/${id}`, sent.url);
       Object.assign(body, { hasImg: true, w: sent.w, h: sent.h });
       if (sent.sticker) body.s = true;
       imgCache.set(id, Promise.resolve(sent.url));
     }
     await rest('PUT', `rooms/${S.key}/messages/${id}`, body);
-    if (sent && sent.sticker) addSticker(sent, true);
+    if (sent && sent.sticker && sent.url) addSticker(sent, true);
     input.value = ''; clearPending(); clearReply(); autosize(); S.forceScroll = true;
   } catch (e) { toast(e.message); }
   finally { S.sending = false; $('#send').disabled = false; input.focus(); }
@@ -868,7 +886,10 @@ function beep() {
     });
   } catch {}
 }
-function setTitle() { document.title = unread ? `(${unread}) Ola` : 'Ola'; }
+function setTitle() {
+  document.title = unread ? `(${unread}) Ola` : 'Ola';
+  try { if (unread) navigator.setAppBadge(unread); else navigator.clearAppBadge(); } catch {}
+}
 function clearUnread() { if (unread) { unread = 0; setTitle(); } }
 
 function handleIncoming(fresh) {
@@ -1043,6 +1064,16 @@ function boot() {
   window.addEventListener('focus', clearUnread);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) clearUnread(); });
   $('#send').onclick = send;
+  document.addEventListener('dragover', e => { if (!$('#v-chat').hidden) e.preventDefault(); });
+  document.addEventListener('drop', e => {
+    if ($('#v-chat').hidden) return;
+    e.preventDefault();
+    const dt = e.dataTransfer; if (!dt) return;
+    const f = [...dt.files].find(x => x.type.startsWith('image/'));
+    if (f) { attachImage(f); return; }
+    const u = imgLink((dt.getData('text/uri-list') || dt.getData('text') || '').split('\n')[0]);
+    if (u) attachLink(u); else toast('Itu bukan gambar yang bisa dikirim.');
+  });
   $('#btnEmo').onclick = () => { const k = $('#pick'); k.hidden = !k.hidden; if (!k.hidden) renderPick(); };
   $('#replyCancel').onclick = clearReply;
   $('#gifIn').onchange = async e => {
@@ -1075,7 +1106,11 @@ function boot() {
   document.addEventListener('paste', e => {
     if ($('#v-chat').hidden) return;
     const item = [...(e.clipboardData ? e.clipboardData.items : [])].find(i => i.kind === 'file' && i.type.startsWith('image/'));
-    if (!item) return;
+    if (!item) {
+      const u = imgLink(e.clipboardData ? e.clipboardData.getData('text') : '');
+      if (u) { e.preventDefault(); attachLink(u); }
+      return;
+    }
     e.preventDefault(); attachImage(item.getAsFile());
   });
 
