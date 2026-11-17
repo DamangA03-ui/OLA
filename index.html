@@ -104,6 +104,22 @@ pre{background:var(--bg2);border:1.5px solid var(--line);border-radius:12px;padd
 #input{flex:1;resize:none;max-height:140px;padding:11px 14px;border-radius:14px;border:1.5px solid var(--line);background:var(--bg);min-height:46px;line-height:1.35}
 #send{min-height:46px;padding:0 20px}
 
+.rooms li.on{border-color:var(--mine);box-shadow:inset 3px 0 0 var(--mine)}
+#side{display:none}
+#side h2{margin:0 4px;font-size:1.15em;font-weight:750}
+#side .rooms{margin:0}
+@media (min-width:900px){
+  body.in-chat #side{display:flex;flex-direction:column;gap:10px;position:fixed;top:0;bottom:0;left:0;width:320px;z-index:5;padding:max(14px,env(safe-area-inset-top)) 12px 12px;background:var(--bg2);border-right:1.5px solid var(--line);overflow-y:auto}
+  body.in-chat #v-chat{max-width:none;margin:0 0 0 320px}
+  body.in-chat #btnLeave{display:none}
+}
+.rooms{list-style:none;margin:0 0 14px;padding:0;display:grid;gap:8px}
+.rooms li{display:flex;align-items:stretch;border:1px solid var(--line);border-radius:12px;background:var(--bg);overflow:hidden}
+.rooms .go{flex:1;min-width:0;text-align:left;padding:12px 14px;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer}
+.rooms .go b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rooms .go small{display:block;opacity:.7;margin-top:2px}
+.rooms .go:hover{background:var(--line)}
+.rooms .rm{width:48px;border:0;border-left:1px solid var(--line);background:transparent;color:inherit;font-size:1.1em;cursor:pointer}
 .meta .tick{opacity:.6;letter-spacing:-.15em;margin-right:.15em}
 .meta .tick.rd{opacity:1;font-weight:700}
 .bar span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -153,12 +169,16 @@ pre{background:var(--bg2);border:1.5px solid var(--line);border-radius:12px;padd
 #lightbox img{max-width:100%;max-height:100%;border-radius:8px}
 #toast{position:fixed;left:50%;bottom:max(90px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:50;max-width:min(92vw,420px);padding:10px 16px;border-radius:12px;background:var(--ink);color:var(--bg);font-weight:600;font-size:.9em;pointer-events:none}
 @media (prefers-reduced-motion:reduce){*{transition:none !important}}
-@media (max-width:520px){.top nav .chip{padding:0 10px}.bubble{max-width:84%}}
+#v-chat{grid-template-columns:minmax(0,1fr)}
+.inputrow textarea{min-width:0}
+@media (max-width:520px){.top nav .chip{padding:0 10px}.bubble{max-width:84%}.top{flex-wrap:wrap}.top nav{width:100%;justify-content:flex-start}}
 </style>
 </head>
 <body>
 
 <noscript><p style="padding:24px">Ola membutuhkan JavaScript.</p></noscript>
+
+<aside id="side" aria-label="Daftar room"><h2>Ola</h2><ul class="rooms" id="sideList"></ul><button class="btn ghost block" id="sideAdd" type="button">Masuk atau buat room</button></aside>
 
 <!-- 1. Alamat database (sekali saja, oleh pembuat) -->
 <section id="v-setup" class="view" hidden>
@@ -187,6 +207,16 @@ pre{background:var(--bg2);border:1.5px solid var(--line);border-radius:12px;padd
   </div>
 </section>
 
+<!-- 2a. Daftar room -->
+<section id="v-list" class="view" hidden>
+  <div class="gate">
+    <h1 class="mark">Ola</h1>
+    <p class="lede">Pilih room untuk mulai mengobrol.</p>
+    <ul class="rooms" id="roomList"></ul>
+    <button class="btn block" id="addRoom" type="button">Masuk atau buat room</button>
+  </div>
+</section>
+
 <!-- 2. Masuk ke room -->
 <section id="v-login" class="view" hidden>
   <div class="gate">
@@ -204,6 +234,7 @@ pre{background:var(--bg2);border:1.5px solid var(--line);border-radius:12px;padd
       </label>
       <div id="loginMsg" class="note" hidden></div>
       <button class="btn block" id="loginBtn" type="submit">Masuk</button>
+      <button class="btn ghost block" id="loginBack" type="button" hidden>Kembali ke daftar</button>
     </form>
     <details>
       <summary>Pengaturan database</summary>
@@ -227,7 +258,7 @@ pre{background:var(--bg2);border:1.5px solid var(--line);border-radius:12px;padd
       <button class="chip" id="btnTheme" type="button">Tema</button>
       <button class="chip" id="btnSet" type="button">Opsi</button>
       <button class="chip" id="btnInvite" type="button">Undang</button>
-      <button class="chip" id="btnLeave" type="button">Keluar</button>
+      <button class="chip" id="btnLeave" type="button">Daftar</button>
     </nav>
   </header>
   <main id="log" aria-live="polite" aria-label="Pesan"></main>
@@ -240,7 +271,7 @@ pre{background:var(--bg2);border:1.5px solid var(--line);border-radius:12px;padd
     <input type="file" id="gifIn" accept="image/*" hidden>
     <div class="inputrow">
       <button class="emo" id="btnEmo" type="button" aria-label="Emoji dan stiker">😊</button>
-      <textarea id="input" rows="1" maxlength="2000" placeholder="Tulis pesan, tempel gambar atau GIF" aria-label="Pesan"></textarea>
+      <textarea id="input" rows="1" maxlength="2000" placeholder="Tulis pesan…" aria-label="Pesan"></textarea>
       <button class="btn" id="send" type="button">Kirim</button>
     </div>
   </footer>
@@ -435,7 +466,9 @@ class AppError extends Error { constructor(code, msg) { super(msg); this.code = 
 
 /* ---------- util tampilan ---------- */
 function show(id) {
-  for (const v of ['v-setup', 'v-login', 'v-chat']) $('#' + v).hidden = v !== id;
+  for (const v of ['v-setup', 'v-list', 'v-login', 'v-chat']) $('#' + v).hidden = v !== id;
+  document.body.classList.toggle('in-chat', id === 'v-chat');
+  if (id === 'v-chat') renderSide();
   window.scrollTo(0, 0);
 }
 let toastTimer;
@@ -571,10 +604,11 @@ function buildMsg(m, showName, ri) {
   if (m.hasImg || m.g) {
     const wrap = el('div', 'imgwrap' + (m.s ? ' sk' : '')), img = document.createElement('img');
     img.alt = 'Gambar dari ' + (m.u || 'teman');
-    if (!m.s && m.w > 0 && m.h > 0) wrap.style.aspectRatio = Math.min(2.2, Math.max(.6, m.w / m.h)).toFixed(3);
+    if (m.w > 0 && m.h > 0) wrap.style.aspectRatio = Math.min(2.2, Math.max(.6, m.w / m.h)).toFixed(3);
     wrap.append(img); b.append(wrap);
     if (m.g) {
-      img.referrerPolicy = 'no-referrer'; img.onload = () => wrap.classList.add('ok'); img.onerror = () => wrap.classList.add('fail');
+      img.referrerPolicy = 'no-referrer'; const lg = $('#log'), near = lg.scrollHeight - lg.scrollTop - lg.clientHeight < 240;
+      img.onload = () => { wrap.classList.add('ok'); if (near) lg.scrollTop = lg.scrollHeight; }; img.onerror = () => wrap.classList.add('fail');
       if (/^https:\/\//.test(m.g)) img.src = String(m.g); else wrap.classList.add('fail');
     } else loadImg(m.id).then(u => { if (u) { img.src = u; wrap.classList.add('ok'); } else wrap.classList.add('fail'); });
     wrap.onclick = () => { if (img.src) openLightbox(img.src); };
@@ -616,7 +650,7 @@ function reconcile(list, map, items) {
 
 function renderMessages() {
   const log = $('#log');
-  if (S.tree.meta && S.tree.meta.name) $('#roomTitle').textContent = S.tree.meta.name;
+  if (S.tree.meta && S.tree.meta.name) { $('#roomTitle').textContent = S.tree.meta.name; rememberName(S.key, S.tree.meta.name); }
   const raw = (S.tree.messages && typeof S.tree.messages === 'object') ? S.tree.messages : {};
   const msgs = Object.entries(raw)
     .filter(([, m]) => m && typeof m === 'object' && typeof m.u === 'string' && !isExpired(m))
@@ -1037,11 +1071,55 @@ function showSetup() { $('#rulesBox').textContent = RULES; show('v-setup'); }
 function showLogin() {
   $('#dbShown').textContent = S.db;
   $('#user').value = LS.get('ngobrol.user', '') || '';
+  $('#loginBack').hidden = !getRooms().length;
   note($('#loginMsg'), '');
   applyTheme(DEFAULT_THEME);
   show('v-login');
 }
 function inviteLink() { return location.origin + location.pathname + '#db=' + encodeURIComponent(S.db); }
+
+const ROOMS_KEY = 'ngobrol.rooms';
+const getRooms = () => { const v = LS.get(ROOMS_KEY, []); return Array.isArray(v) ? v.filter(r => r && typeof r.key === 'string' && typeof r.user === 'string') : []; };
+function saveRoom(r) {
+  const list = getRooms().filter(x => x.key !== r.key);
+  list.unshift({ key: r.key, name: String(r.name || 'Room').slice(0, 40), user: r.user, at: Date.now() });
+  LS.set(ROOMS_KEY, list.slice(0, 30));
+}
+function rememberName(key, name) {
+  const l = getRooms(), r = l.find(x => x.key === key);
+  if (r && name && r.name !== name) { r.name = String(name).slice(0, 40); LS.set(ROOMS_KEY, l); if (document.body.classList.contains('in-chat')) renderSide(); }
+}
+function fillRooms(ul) {
+  ul.textContent = '';
+  for (const r of getRooms()) {
+    const li = el('li', r.key === S.key ? 'on' : null), go = el('button', 'go'); go.type = 'button';
+    go.append(el('b', null, r.name), el('small', null, 'Sebagai ' + r.user));
+    go.onclick = () => { if (r.key === S.key) return; if (S.key) closeRoom(); openRoom(r); };
+    const rm = el('button', 'rm', '×'); rm.type = 'button'; rm.title = 'Hapus dari daftar'; rm.setAttribute('aria-label', 'Hapus ' + r.name + ' dari daftar');
+    rm.onclick = () => {
+      if (!confirm('Hapus "' + r.name + '" dari daftar? Untuk masuk lagi kamu perlu nama room dan passwordnya.')) return;
+      LS.set(ROOMS_KEY, getRooms().filter(x => x.key !== r.key));
+      if (r.key === S.key) { closeRoom(); if (getRooms().length) showList(); else showLogin(); }
+      else { renderSide(); if (!$('#v-list').hidden) showList(); }
+    };
+    li.append(go, rm); ul.append(li);
+  }
+}
+function renderSide() { fillRooms($('#sideList')); }
+function showList() { S.key = ''; applyTheme(DEFAULT_THEME); fillRooms($('#roomList')); show('v-list'); }
+async function openRoom(r) {
+  try {
+    S.key = r.key; S.user = r.user;
+    const meta = await rest('GET', `rooms/${r.key}/meta`);
+    if (!meta) {
+      LS.set(ROOMS_KEY, getRooms().filter(x => x.key !== r.key)); toast('Room itu sudah tidak ada.');
+      if (getRooms().length) showList(); else showLogin();
+      return;
+    }
+    saveRoom({ key: r.key, name: meta.name || r.name, user: r.user });
+    openChat();
+  } catch (e) { S.key = ''; toast(e.message || 'Gagal membuka room.'); }
+}
 
 async function enter(create) {
   const roomRaw = $('#room').value.trim(), pass = $('#pass').value;
@@ -1063,7 +1141,7 @@ async function enter(create) {
       }
       await rest('PUT', `rooms/${key}/meta`, { name: roomRaw.slice(0, 40), owner: S.cid, created: { '.sv': 'timestamp' } });
     }
-    S.user = user; LS.set('ngobrol.user', user); LS.set('ngobrol.session', { key, user });
+    S.user = user; LS.set('ngobrol.user', user); saveRoom({ key, name: (meta && meta.name) || roomRaw, user });
     $('#pass').value = '';
     openChat();
   } catch (e) { note(msg, e.message || 'Gagal masuk.', true); }
@@ -1079,13 +1157,13 @@ function openChat() {
   $('#input').focus();
 }
 function stopEditSilently() { clearReply(); S.editing = null; $('#editBar').hidden = true; $('#send').textContent = 'Kirim'; $('#input').value = ''; }
-function leave() {
+function closeRoom() {
   clearInterval(tickTimer); clearInterval(presTimer); dropPresence(false);
   if (S.es) S.es.close(); S.es = null;
-  LS.del('ngobrol.session'); S.key = ''; S.tree = {}; imgCache.clear();
+  S.key = ''; S.tree = {}; imgCache.clear();
   S.seen = new Set(); S.primed = false; clearUnread(); closeSettings();
-  showLogin();
 }
+function leave() { closeRoom(); if (getRooms().length) showList(); else showLogin(); }
 
 /* ---------- pasang event ---------- */
 function boot() {
@@ -1110,10 +1188,13 @@ function boot() {
   $('#copyRules').onclick = () => copyText(RULES, 'Aturan tersalin');
   $('#loginForm').onsubmit = e => { e.preventDefault(); enter(false); };
   $('#copyInvite').onclick = () => copyText(inviteLink(), 'Tautan tersalin');
-  $('#resetDb').onclick = () => { LS.del('ngobrol.db'); LS.del('ngobrol.session'); S.db = ''; showSetup(); };
+  $('#resetDb').onclick = () => { LS.del('ngobrol.db'); LS.del('ngobrol.session'); LS.del(ROOMS_KEY); S.db = ''; showSetup(); };
 
   $('#btnInvite').onclick = () => copyText(inviteLink(), 'Tautan tersalin. Kirim nama room dan passwordnya secara terpisah.');
   $('#btnLeave').onclick = leave;
+  $('#addRoom').onclick = showLogin;
+  $('#sideAdd').onclick = () => { closeRoom(); showLogin(); };
+  $('#loginBack').onclick = showList;
   $('#btnTheme').onclick = openTheme;
   $('#btnSet').onclick = openSettings;
   $('#setClose').onclick = closeSettings;
@@ -1222,13 +1303,17 @@ function boot() {
 
   // mulai
   if (!S.db) { showSetup(); return; }
-  const sess = LS.get('ngobrol.session');
-  if (sess && sess.key && sess.user) {
-    S.key = sess.key; S.user = sess.user;
-    rest('GET', `rooms/${S.key}/meta`).then(meta => {
-      if (meta) openChat(); else { leave(); toast('Room itu sudah tidak ada.'); }
-    }).catch(() => { leave(); });
-  } else showLogin();
+  const old = LS.get('ngobrol.session'); // sesi dari versi lama dipindah ke daftar
+  if (old && old.key && old.user) {
+    if (!getRooms().some(r => r.key === old.key)) {
+      saveRoom({ key: old.key, name: 'Room', user: old.user });
+      rest('GET', `rooms/${old.key}/meta`).then(mt => {
+        if (mt && mt.name) { rememberName(old.key, mt.name); if (!$('#v-list').hidden) showList(); }
+      }).catch(() => {});
+    }
+    LS.del('ngobrol.session');
+  }
+  if (getRooms().length) showList(); else showLogin();
 }
 boot();
 })();
