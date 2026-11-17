@@ -104,6 +104,8 @@ pre{background:var(--bg2);border:1.5px solid var(--line);border-radius:12px;padd
 #input{flex:1;resize:none;max-height:140px;padding:11px 14px;border-radius:14px;border:1.5px solid var(--line);background:var(--bg);min-height:46px;line-height:1.35}
 #send{min-height:46px;padding:0 20px}
 
+.ver{display:block;margin-top:18px;opacity:.5;font-size:.75em}
+#side .ver{margin-top:auto}
 .rooms li.on{border-color:var(--mine);box-shadow:inset 3px 0 0 var(--mine)}
 #side{display:none}
 #side h2{margin:0 4px;font-size:1.15em;font-weight:750}
@@ -180,7 +182,7 @@ pre{background:var(--bg2);border:1.5px solid var(--line);border-radius:12px;padd
 
 <noscript><p style="padding:24px">Ola membutuhkan JavaScript.</p></noscript>
 
-<aside id="side" aria-label="Daftar room"><h2>Ola</h2><ul class="rooms" id="sideList"></ul><button class="btn ghost block" id="sideAdd" type="button">Masuk atau buat room</button></aside>
+<aside id="side" aria-label="Daftar room"><h2>Ola</h2><ul class="rooms" id="sideList"></ul><button class="btn ghost block" id="sideAdd" type="button">Masuk atau buat room</button><small class="ver">v2026.11.17-b</small></aside>
 
 <!-- 1. Alamat database (sekali saja, oleh pembuat) -->
 <section id="v-setup" class="view" hidden>
@@ -246,6 +248,7 @@ pre{background:var(--bg2);border:1.5px solid var(--line);border-radius:12px;padd
         <button class="btn ghost" id="resetDb" type="button">Ganti database</button>
       </div>
     </details>
+    <small class="ver">v2026.11.17-b</small>
   </div>
 </section>
 
@@ -1330,6 +1333,8 @@ function boot() {
   if (!S.db) { showSetup(); return; }
   // daftar room hanya hidup selama jendela ini terbuka; setelah ditutup (X), login diminta lagi
   LS.del('ngobrol.session'); LS.del('ngobrol.rooms');
+  const navType = (performance.getEntriesByType('navigation')[0] || {}).type;
+  if (navType !== 'reload') SS.del(ROOMS_KEY); // hanya refresh yang mempertahankan daftar; dibuka ulang = login lagi
   if (getRooms().length) showList(); else showLogin();
 }
 boot();
