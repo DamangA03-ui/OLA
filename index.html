@@ -104,6 +104,8 @@ pre{background:var(--bg2);border:1.5px solid var(--line);border-radius:12px;padd
 #input{flex:1;resize:none;max-height:140px;padding:11px 14px;border-radius:14px;border:1.5px solid var(--line);background:var(--bg);min-height:46px;line-height:1.35}
 #send{min-height:46px;padding:0 20px}
 
+.meta .tick{opacity:.6;letter-spacing:-.15em;margin-right:.15em}
+.meta .tick.rd{opacity:1;font-weight:700}
 .bar span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .quote{margin:0 0 5px;padding:4px 8px;border-left:3px solid currentColor;border-radius:6px;background:rgba(127,127,127,.2);font-size:.85em;cursor:pointer;max-width:100%}
 .quote b{display:block;font-weight:700;opacity:.9}
@@ -281,6 +283,8 @@ pre{background:var(--bg2);border:1.5px solid var(--line);border-radius:12px;padd
     <h3>Pemberitahuan</h3>
     <label class="check"><input type="checkbox" id="pNotif"> Notifikasi desktop saat ada pesan baru</label>
     <label class="check"><input type="checkbox" id="pSound"> Bunyi saat pesan masuk</label>
+    <label class="check"><input type="checkbox" id="pPres"> Beri tahu saat anggota masuk atau keluar room</label>
+    <label class="check"><input type="checkbox" id="pRead"> Tunjukkan tanda sudah dibaca ke anggota lain</label>
     <p class="hint" id="notifHint"></p>
     <h3>Hapus otomatis</h3>
     <label class="check"><input type="checkbox" id="pAuto"> Hapus semua pesan setiap pukul 18.00</label>
@@ -422,7 +426,7 @@ const LS = {
   del(k) { try { localStorage.removeItem(k); } catch {} }
 };
 
-const S = { db: '', cid: '', user: '', key: '', tree: {}, es: null, pending: null, editing: null, replyTo: null, sending: false, forceScroll: false, lastCount: 0, seen: new Set(), primed: false };
+const S = { db: '', cid: '', user: '', key: '', tree: {}, es: null, pending: null, editing: null, replyTo: null, online: null, skew: 0, skewOk: false, readSent: 0, newestT: 0, sending: false, forceScroll: false, lastCount: 0, seen: new Set(), primed: false };
 const imgCache = new Map();
 const nodes = new Map();      // elemen pesan yang sudah digambar
 let draft = null;             // tema yang sedang diedit
@@ -532,6 +536,7 @@ function connect() {
 let renderQueued = false;
 function onTree() {
   detectIncoming(); // langsung, tanpa timer, supaya tetap jalan saat jendela di latar belakang
+  checkPresence();
   if (renderQueued) return; renderQueued = true;
   setTimeout(() => { renderQueued = false; refreshTheme(); renderMessages(); sweep(); }, 30);
 }
@@ -554,7 +559,7 @@ function dayLabel(t) {
 }
 const isOwner = () => !!(S.tree.meta && S.tree.meta.owner === S.cid);
 
-function buildMsg(m, showName) {
+function buildMsg(m, showName, ri) {
   const mine = m.c === S.cid;
   const row = el('div', 'msg ' + (mine ? 'mine' : 'theirs'));
   const b = el('div', 'bubble' + (m.s && !m.text ? ' stk' : '')); row.append(b);
@@ -577,6 +582,10 @@ function buildMsg(m, showName) {
   if (m.text) { const p = el('div', 'txt'); linkify(p, m.text); b.append(p); }
   const meta = el('div', 'meta'); meta.append(el('span', null, timeStr(m.t)));
   if (m.edited) meta.append(el('span', null, 'diedit'));
+  if (ri) {
+    meta.append(el('span', ri.n ? 'tick rd' : 'tick', ri.n ? '✓✓' : '✓'));
+    if (ri.names) meta.append(el('span', null, 'Dibaca oleh ' + ri.names));
+  }
   b.append(meta);
   {
     const btn = el('button', 'more', '⋯'); btn.type = 'button'; btn.setAttribute('aria-label', 'Opsi pesan');
@@ -616,14 +625,24 @@ function renderMessages() {
 
   const nearBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 140;
   const owner = isOwner();
+  const rd = Object.entries(S.tree.reads && typeof S.tree.reads === 'object' ? S.tree.reads : {})
+    .filter(([c, v]) => c !== S.cid && v && typeof v.u === 'string' && typeof v.t === 'number')
+    .map(([, v]) => ({ u: v.u.slice(0, 24), t: v.t }));
+  let lastReadId = '';
+  for (let i = msgs.length - 1; i >= 0; i--) { const q = msgs[i]; if (q.c === S.cid && q.t && rd.some(r => r.t >= q.t)) { lastReadId = q.id; break; } }
   const items = [];
   let prev = null, lastDay = '';
   for (const m of msgs) {
     const day = m.t ? new Date(m.t).toDateString() : '';
     if (day && day !== lastDay) { items.push({ key: 'd:' + day, sig: day, build: () => el('div', 'sep', dayLabel(m.t)) }); lastDay = day; prev = null; }
     const showName = !prev || prev.c !== m.c || prev.u !== m.u || (m.t - prev.t) > 300000;
-    const sig = JSON.stringify([m.u, m.c === S.cid, m.text, m.edited, m.t, m.hasImg, m.w, m.h, m.s, m.g, m.r, showName, owner]);
-    items.push({ key: 'm:' + m.id, sig, build: () => buildMsg(m, showName) });
+    let ri = null;
+    if (m.c === S.cid && m.t) {
+      const rs = rd.filter(r => r.t >= m.t);
+      ri = { n: rs.length, names: m.id === lastReadId ? [...new Set(rs.map(r => r.u))].join(', ') : '' };
+    }
+    const sig = JSON.stringify([m.u, m.c === S.cid, m.text, m.edited, m.t, m.hasImg, m.w, m.h, m.s, m.g, m.r, showName, owner, ri]);
+    items.push({ key: 'm:' + m.id, sig, build: () => buildMsg(m, showName, ri) });
     prev = m;
   }
   let emptyEl = log.querySelector('.empty');
@@ -639,6 +658,7 @@ function renderMessages() {
     $('#newPill').hidden = false;
   }
   S.lastCount = msgs.length; S.forceScroll = false;
+  S.newestT = msgs.length ? (msgs[msgs.length - 1].t || 0) : 0; markRead(S.newestT);
 }
 
 /* ---------- menu pesan, edit, hapus ---------- */
@@ -861,7 +881,7 @@ function tick() {
 }
 
 /* ---------- pemberitahuan ---------- */
-const PREFS = Object.assign({ notif: false, sound: true }, LS.get('ngobrol.prefs') || {});
+const PREFS = Object.assign({ notif: false, sound: true, pres: true, read: true }, LS.get('ngobrol.prefs') || {});
 const savePrefs = () => LS.set('ngobrol.prefs', PREFS);
 let audioCtx = null, unread = 0;
 
@@ -923,6 +943,55 @@ function detectIncoming() {
   handleIncoming(fresh);
 }
 
+/* ---------- masuk dan keluar room ---------- */
+const ONLINE_MS = 300000; // dianggap keluar bila tidak ada sinyal selama 5 menit
+let presTimer = 0;
+const srvNow = () => Date.now() + S.skew;
+async function beat() {
+  if (!S.key || !S.user) return;
+  const key = S.key;
+  try {
+    const r = await rest('PUT', `rooms/${key}/presence/${S.cid}`, { u: S.user, t: { '.sv': 'timestamp' } });
+    if (key === S.key && r && typeof r.t === 'number') { S.skew = r.t - Date.now(); S.skewOk = true; }
+  } catch {}
+}
+function dropPresence(keep) {
+  if (!S.key || !S.db) return;
+  try { fetch(`${S.db}/rooms/${S.key}/presence/${S.cid}.json`, { method: 'DELETE', keepalive: !!keep }).catch(() => {}); } catch {}
+}
+function whoOnline() {
+  const out = {}, p = S.tree.presence, now = srvNow();
+  if (p && typeof p === 'object') for (const [c, v] of Object.entries(p)) {
+    if (c !== S.cid && v && typeof v.u === 'string' && typeof v.t === 'number' && now - v.t < ONLINE_MS) out[c] = v.u.slice(0, 24);
+  }
+  return out;
+}
+function checkPresence() {
+  if (!S.skewOk) return;
+  const cur = whoOnline(), prev = S.online; S.online = cur;
+  if (!prev) return; // pemuatan pertama hanya dicatat
+  const joined = [...new Set(Object.keys(cur).filter(c => !(c in prev)).map(c => cur[c]))];
+  const left = [...new Set(Object.keys(prev).filter(c => !(c in cur)).map(c => prev[c]))];
+  const parts = [];
+  if (joined.length) parts.push(joined.join(', ') + ' bergabung');
+  if (left.length) parts.push(left.join(', ') + ' keluar');
+  if (!parts.length || !PREFS.pres) return;
+  const text = parts.join(' · ');
+  toast(text);
+  if (PREFS.notif && (document.hidden || !document.hasFocus()) && 'Notification' in window && Notification.permission === 'granted') {
+    try { const n = new Notification('Ola', { body: text, tag: 'ola-presence' }); n.onclick = () => { window.focus(); n.close(); }; } catch {}
+  }
+}
+
+/* ---------- tanda dibaca ---------- */
+// Mencatat pesan terbaru yang sudah terlihat; hanya saat jendela sedang dilihat
+function markRead(t) {
+  if (!PREFS.read || !S.key || !S.user || !t || t <= S.readSent) return;
+  if (document.hidden || !document.hasFocus()) return;
+  S.readSent = t;
+  rest('PUT', `rooms/${S.key}/reads/${S.cid}`, { u: S.user, t }).catch(() => { S.readSent = 0; });
+}
+
 /* ---------- opsi ---------- */
 let wipeTimer = 0;
 function resetWipe() { clearTimeout(wipeTimer); wipeTimer = 0; const b = $('#wipeBtn'); b.disabled = false; b.textContent = 'Hapus semua pesan'; }
@@ -930,7 +999,7 @@ function syncSettings() {
   const sup = 'Notification' in window, perm = sup ? Notification.permission : 'denied';
   $('#pNotif').disabled = !sup;
   $('#pNotif').checked = sup && perm === 'granted' && PREFS.notif;
-  $('#pSound').checked = PREFS.sound;
+  $('#pSound').checked = PREFS.sound; $('#pPres').checked = PREFS.pres; $('#pRead').checked = PREFS.read;
   $('#notifHint').textContent = !sup
     ? 'Browser ini tidak mendukung notifikasi desktop.'
     : perm === 'denied'
@@ -1006,11 +1075,12 @@ function openChat() {
   $('#roomTitle').textContent = 'Memuat…';
   stopEditSilently(); clearPending();
   show('v-chat'); connect(); lastCut = 0; clearInterval(tickTimer); tickTimer = setInterval(tick, 20000);
+  S.online = null; S.skew = 0; S.skewOk = false; S.readSent = 0; S.newestT = 0; clearInterval(presTimer); beat(); presTimer = setInterval(() => { beat(); checkPresence(); }, 25000);
   $('#input').focus();
 }
 function stopEditSilently() { clearReply(); S.editing = null; $('#editBar').hidden = true; $('#send').textContent = 'Kirim'; $('#input').value = ''; }
 function leave() {
-  clearInterval(tickTimer);
+  clearInterval(tickTimer); clearInterval(presTimer); dropPresence(false);
   if (S.es) S.es.close(); S.es = null;
   LS.del('ngobrol.session'); S.key = ''; S.tree = {}; imgCache.clear();
   S.seen = new Set(); S.primed = false; clearUnread(); closeSettings();
@@ -1050,6 +1120,8 @@ function boot() {
   $('#setPanel').addEventListener('click', e => { if (e.target === $('#setPanel')) closeSettings(); });
   $('#wipeBtn').onclick = wipeAll;
   $('#pSound').onchange = e => { PREFS.sound = e.target.checked; savePrefs(); if (PREFS.sound) { ensureAudio(); beep(); } };
+  $('#pPres').onchange = e => { PREFS.pres = e.target.checked; savePrefs(); };
+  $('#pRead').onchange = e => { PREFS.read = e.target.checked; savePrefs(); if (PREFS.read) markRead(S.newestT); };
   $('#pNotif').onchange = async e => {
     if (!e.target.checked) { PREFS.notif = false; savePrefs(); return; }
     let perm = 'denied';
@@ -1062,7 +1134,10 @@ function boot() {
   };
   for (const ev of ['pointerdown', 'keydown']) document.addEventListener(ev, ensureAudio, { once: true });
   window.addEventListener('focus', clearUnread);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) clearUnread(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { clearUnread(); beat(); markRead(S.newestT); } });
+  window.addEventListener('focus', () => markRead(S.newestT));
+  window.addEventListener('pagehide', e => { if (!e.persisted) dropPresence(true); });
+  window.addEventListener('pageshow', e => { if (e.persisted && S.key) beat(); });
   $('#send').onclick = send;
   document.addEventListener('dragover', e => { if (!$('#v-chat').hidden) e.preventDefault(); });
   document.addEventListener('drop', e => {
