@@ -109,9 +109,11 @@ pre{background:var(--bg2);border:1.5px solid var(--line);border-radius:12px;padd
 #side h2{margin:0 4px;font-size:1.15em;font-weight:750}
 #side .rooms{margin:0}
 @media (min-width:900px){
-  body.in-chat #side{display:flex;flex-direction:column;gap:10px;position:fixed;top:0;bottom:0;left:0;width:320px;z-index:5;padding:max(14px,env(safe-area-inset-top)) 12px 12px;background:var(--bg2);border-right:1.5px solid var(--line);overflow-y:auto}
+  body.in-chat #side,body.in-list #side{display:flex;flex-direction:column;gap:10px;position:fixed;top:0;bottom:0;left:0;width:320px;z-index:5;padding:max(14px,env(safe-area-inset-top)) 12px 12px;background:var(--bg2);border-right:1.5px solid var(--line);overflow-y:auto}
   body.in-chat #v-chat{max-width:none;margin:0 0 0 320px}
   body.in-chat #btnLeave{display:none}
+  body.in-list #v-list{margin-left:320px;display:grid;place-items:center}
+  body.in-list #roomList,body.in-list #addRoom{display:none}
 }
 .rooms{list-style:none;margin:0 0 14px;padding:0;display:grid;gap:8px}
 .rooms li{display:flex;align-items:stretch;border:1px solid var(--line);border-radius:12px;background:var(--bg);overflow:hidden}
@@ -259,6 +261,7 @@ pre{background:var(--bg2);border:1.5px solid var(--line);border-radius:12px;padd
       <button class="chip" id="btnSet" type="button">Opsi</button>
       <button class="chip" id="btnInvite" type="button">Undang</button>
       <button class="chip" id="btnLeave" type="button">Daftar</button>
+      <button class="chip" id="btnExit" type="button">Keluar</button>
     </nav>
   </header>
   <main id="log" aria-live="polite" aria-label="Pesan"></main>
@@ -468,7 +471,8 @@ class AppError extends Error { constructor(code, msg) { super(msg); this.code = 
 function show(id) {
   for (const v of ['v-setup', 'v-list', 'v-login', 'v-chat']) $('#' + v).hidden = v !== id;
   document.body.classList.toggle('in-chat', id === 'v-chat');
-  if (id === 'v-chat') renderSide();
+  document.body.classList.toggle('in-list', id === 'v-list');
+  if (id === 'v-chat' || id === 'v-list') renderSide();
   window.scrollTo(0, 0);
 }
 let toastTimer;
@@ -1100,6 +1104,7 @@ function fillRooms(ul) {
       if (!confirm('Hapus "' + r.name + '" dari daftar? Untuk masuk lagi kamu perlu nama room dan passwordnya.')) return;
       LS.set(ROOMS_KEY, getRooms().filter(x => x.key !== r.key));
       if (r.key === S.key) { closeRoom(); if (getRooms().length) showList(); else showLogin(); }
+      else if (!getRooms().length) showLogin();
       else { renderSide(); if (!$('#v-list').hidden) showList(); }
     };
     li.append(go, rm); ul.append(li);
@@ -1163,6 +1168,12 @@ function closeRoom() {
   S.key = ''; S.tree = {}; imgCache.clear();
   S.seen = new Set(); S.primed = false; clearUnread(); closeSettings();
 }
+function exitRoom() {
+  const key = S.key, r = getRooms().find(x => x.key === key);
+  if (!confirm('Keluar dari "' + (r ? r.name : 'room ini') + '"? Kamu perlu nama room dan password untuk masuk lagi.')) return;
+  LS.set(ROOMS_KEY, getRooms().filter(x => x.key !== key));
+  leave();
+}
 function leave() { closeRoom(); if (getRooms().length) showList(); else showLogin(); }
 
 /* ---------- pasang event ---------- */
@@ -1192,6 +1203,7 @@ function boot() {
 
   $('#btnInvite').onclick = () => copyText(inviteLink(), 'Tautan tersalin. Kirim nama room dan passwordnya secara terpisah.');
   $('#btnLeave').onclick = leave;
+  $('#btnExit').onclick = exitRoom;
   $('#addRoom').onclick = showLogin;
   $('#sideAdd').onclick = () => { closeRoom(); showLogin(); };
   $('#loginBack').onclick = showList;
@@ -1254,10 +1266,10 @@ function boot() {
   $('#log').addEventListener('scroll', () => { const l = $('#log'); if (l.scrollHeight - l.scrollTop - l.clientHeight < 140) $('#newPill').hidden = true; });
 
   const input = $('#input');
+  let escAt = 0;
   input.addEventListener('input', autosize);
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey && matchMedia('(pointer:fine)').matches) { e.preventDefault(); send(); }
-    if (e.key === 'Escape' && S.editing) stopEdit();
   });
   document.addEventListener('paste', e => {
     if ($('#v-chat').hidden) return;
@@ -1278,7 +1290,14 @@ function boot() {
     if (!$('#lightbox').hidden) $('#lightbox').hidden = true;
     else if (!$('#themePanel').hidden) closeTheme();
     else if (!$('#setPanel').hidden) closeSettings();
-    else closeMenu();
+    else if (!$('#menu').hidden) closeMenu();
+    else if ($('#v-chat').hidden) return;
+    else if (!$('#pick').hidden) $('#pick').hidden = true;
+    else if (S.editing) stopEdit();
+    else if (S.replyTo) clearReply();
+    else if (S.pending) clearPending();
+    else if (input.value.trim() && Date.now() - escAt > 2500) { escAt = Date.now(); toast('Ada pesan yang belum terkirim. Tekan Esc lagi untuk menutup room.'); }
+    else { $('#toast').hidden = true; leave(); }
   });
 
   // tema
