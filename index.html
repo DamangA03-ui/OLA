@@ -460,6 +460,12 @@ const LS = {
   del(k) { try { localStorage.removeItem(k); } catch {} }
 };
 
+const SS = {
+  get(k, d = null) { try { const v = sessionStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { sessionStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  del(k) { try { sessionStorage.removeItem(k); } catch {} }
+};
+
 const S = { db: '', cid: '', user: '', key: '', tree: {}, es: null, pending: null, editing: null, replyTo: null, online: null, skew: 0, skewOk: false, readSent: 0, newestT: 0, sending: false, forceScroll: false, lastCount: 0, seen: new Set(), primed: false };
 const imgCache = new Map();
 const nodes = new Map();      // elemen pesan yang sudah digambar
@@ -1083,15 +1089,15 @@ function showLogin() {
 function inviteLink() { return location.origin + location.pathname + '#db=' + encodeURIComponent(S.db); }
 
 const ROOMS_KEY = 'ngobrol.rooms';
-const getRooms = () => { const v = LS.get(ROOMS_KEY, []); return Array.isArray(v) ? v.filter(r => r && typeof r.key === 'string' && typeof r.user === 'string') : []; };
+const getRooms = () => { const v = SS.get(ROOMS_KEY, []); return Array.isArray(v) ? v.filter(r => r && typeof r.key === 'string' && typeof r.user === 'string') : []; };
 function saveRoom(r) {
   const list = getRooms().filter(x => x.key !== r.key);
   list.unshift({ key: r.key, name: String(r.name || 'Room').slice(0, 40), user: r.user, at: Date.now() });
-  LS.set(ROOMS_KEY, list.slice(0, 30));
+  SS.set(ROOMS_KEY, list.slice(0, 30));
 }
 function rememberName(key, name) {
   const l = getRooms(), r = l.find(x => x.key === key);
-  if (r && name && r.name !== name) { r.name = String(name).slice(0, 40); LS.set(ROOMS_KEY, l); if (document.body.classList.contains('in-chat')) renderSide(); }
+  if (r && name && r.name !== name) { r.name = String(name).slice(0, 40); SS.set(ROOMS_KEY, l); if (document.body.classList.contains('in-chat')) renderSide(); }
 }
 function fillRooms(ul) {
   ul.textContent = '';
@@ -1102,7 +1108,7 @@ function fillRooms(ul) {
     const rm = el('button', 'rm', '×'); rm.type = 'button'; rm.title = 'Hapus dari daftar'; rm.setAttribute('aria-label', 'Hapus ' + r.name + ' dari daftar');
     rm.onclick = () => {
       if (!confirm('Hapus "' + r.name + '" dari daftar? Untuk masuk lagi kamu perlu nama room dan passwordnya.')) return;
-      LS.set(ROOMS_KEY, getRooms().filter(x => x.key !== r.key));
+      SS.set(ROOMS_KEY, getRooms().filter(x => x.key !== r.key));
       if (r.key === S.key) { closeRoom(); if (getRooms().length) showList(); else showLogin(); }
       else if (!getRooms().length) showLogin();
       else { renderSide(); if (!$('#v-list').hidden) showList(); }
@@ -1117,7 +1123,7 @@ async function openRoom(r) {
     S.key = r.key; S.user = r.user;
     const meta = await rest('GET', `rooms/${r.key}/meta`);
     if (!meta) {
-      LS.set(ROOMS_KEY, getRooms().filter(x => x.key !== r.key)); toast('Room itu sudah tidak ada.');
+      SS.set(ROOMS_KEY, getRooms().filter(x => x.key !== r.key)); toast('Room itu sudah tidak ada.');
       if (getRooms().length) showList(); else showLogin();
       return;
     }
@@ -1171,7 +1177,7 @@ function closeRoom() {
 function exitRoom() {
   const key = S.key, r = getRooms().find(x => x.key === key);
   if (!confirm('Keluar dari "' + (r ? r.name : 'room ini') + '"? Kamu perlu nama room dan password untuk masuk lagi.')) return;
-  LS.set(ROOMS_KEY, getRooms().filter(x => x.key !== key));
+  SS.set(ROOMS_KEY, getRooms().filter(x => x.key !== key));
   leave();
 }
 function leave() { closeRoom(); if (getRooms().length) showList(); else showLogin(); }
@@ -1199,7 +1205,7 @@ function boot() {
   $('#copyRules').onclick = () => copyText(RULES, 'Aturan tersalin');
   $('#loginForm').onsubmit = e => { e.preventDefault(); enter(false); };
   $('#copyInvite').onclick = () => copyText(inviteLink(), 'Tautan tersalin');
-  $('#resetDb').onclick = () => { LS.del('ngobrol.db'); LS.del('ngobrol.session'); LS.del(ROOMS_KEY); S.db = ''; showSetup(); };
+  $('#resetDb').onclick = () => { LS.del('ngobrol.db'); LS.del('ngobrol.session'); SS.del(ROOMS_KEY); S.db = ''; showSetup(); };
 
   $('#btnInvite').onclick = () => copyText(inviteLink(), 'Tautan tersalin. Kirim nama room dan passwordnya secara terpisah.');
   $('#btnLeave').onclick = leave;
@@ -1322,16 +1328,8 @@ function boot() {
 
   // mulai
   if (!S.db) { showSetup(); return; }
-  const old = LS.get('ngobrol.session'); // sesi dari versi lama dipindah ke daftar
-  if (old && old.key && old.user) {
-    if (!getRooms().some(r => r.key === old.key)) {
-      saveRoom({ key: old.key, name: 'Room', user: old.user });
-      rest('GET', `rooms/${old.key}/meta`).then(mt => {
-        if (mt && mt.name) { rememberName(old.key, mt.name); if (!$('#v-list').hidden) showList(); }
-      }).catch(() => {});
-    }
-    LS.del('ngobrol.session');
-  }
+  // daftar room hanya hidup selama jendela ini terbuka; setelah ditutup (X), login diminta lagi
+  LS.del('ngobrol.session'); LS.del('ngobrol.rooms');
   if (getRooms().length) showList(); else showLogin();
 }
 boot();
