@@ -182,7 +182,7 @@ pre{background:var(--bg2);border:1.5px solid var(--line);border-radius:12px;padd
 
 <noscript><p style="padding:24px">Ola membutuhkan JavaScript.</p></noscript>
 
-<aside id="side" aria-label="Daftar room"><h2>Ola</h2><ul class="rooms" id="sideList"></ul><button class="btn ghost block" id="sideAdd" type="button">Masuk atau buat room</button><small class="ver">v2026.11.17-b</small></aside>
+<aside id="side" aria-label="Daftar room"><h2>Ola</h2><ul class="rooms" id="sideList"></ul><button class="btn ghost block" id="sideAdd" type="button">Masuk atau buat room</button><small class="ver">v2026.11.17-d</small></aside>
 
 <!-- 1. Alamat database (sekali saja, oleh pembuat) -->
 <section id="v-setup" class="view" hidden>
@@ -248,7 +248,7 @@ pre{background:var(--bg2);border:1.5px solid var(--line);border-radius:12px;padd
         <button class="btn ghost" id="resetDb" type="button">Ganti database</button>
       </div>
     </details>
-    <small class="ver">v2026.11.17-b</small>
+    <small class="ver">v2026.11.17-d</small>
   </div>
 </section>
 
@@ -323,6 +323,15 @@ pre{background:var(--bg2);border:1.5px solid var(--line);border-radius:12px;padd
     <label class="check"><input type="checkbox" id="pPres"> Beri tahu saat anggota masuk atau keluar room</label>
     <label class="check"><input type="checkbox" id="pRead"> Tunjukkan tanda sudah dibaca ke anggota lain</label>
     <p class="hint" id="notifHint"></p>
+    <h3>Kunci room</h3>
+    <label class="field" style="margin:0"><span id="lockLbl">Kunci untuk membuka room ini dari daftar</span>
+      <input id="lockIn" type="password" autocomplete="new-password" maxlength="40" placeholder="Kunci baru, minimal 2 karakter">
+    </label>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" id="lockSave" type="button">Simpan kunci</button>
+      <button class="btn ghost" id="lockDel" type="button" hidden>Hapus kunci</button>
+    </div>
+    <p class="hint" id="lockHint"></p>
     <h3>Hapus otomatis</h3>
     <label class="check"><input type="checkbox" id="pAuto"> Hapus semua pesan setiap pukul 18.00</label>
     <p class="hint" id="autoHint"></p>
@@ -334,6 +343,20 @@ pre{background:var(--bg2);border:1.5px solid var(--line);border-radius:12px;padd
     <div class="row" style="margin-top:18px">
       <button class="btn ghost" id="setClose" type="button">Tutup</button>
     </div>
+  </div>
+</div>
+
+<div class="sheet" id="keyPanel" role="dialog" aria-modal="true" aria-labelledby="keyTitle" hidden>
+  <div>
+    <h2 id="keyTitle"></h2>
+    <form id="keyForm" novalidate>
+      <label class="field"><span>Kunci</span><input id="keyIn" type="password" autocomplete="off" maxlength="40"></label>
+      <div id="keyMsg" class="note err" hidden></div>
+      <div class="row">
+        <button class="btn" id="keyOk" type="submit">Buka</button>
+        <button class="btn ghost" id="keyCancel" type="button">Batal</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -1053,6 +1076,13 @@ function syncSettings() {
       ? 'Notifikasi diblokir di browser. Klik ikon gembok di kolom alamat, ubah Notifikasi menjadi Izinkan, lalu buka opsi ini lagi.'
       : 'Notifikasi hanya muncul saat jendela Ola tidak sedang dilihat. Judul tab menampilkan jumlah pesan yang belum dibaca.';
   $('#dangerZone').hidden = !isOwner();
+  const locked = hasLock(S.key);
+  $('#lockDel').hidden = !locked; $('#lockIn').value = '';
+  $('#lockLbl').textContent = locked ? 'Ganti kunci' : 'Kunci untuk membuka room ini dari daftar';
+  $('#lockIn').placeholder = locked ? 'Kunci pengganti' : 'Kunci baru, minimal 2 karakter';
+  $('#lockHint').textContent = locked
+    ? 'Kunci aktif. Room ini meminta kunci setiap dibuka dari daftar.'
+    : 'Belum ada kunci. Kunci hanya berlaku di perangkat ini dan tidak dikirim ke database.';
   $('#pAuto').checked = autoOn(); $('#pAuto').disabled = !isOwner();
   $('#autoHint').textContent = isOwner()
     ? 'Pesan sebelum pukul 18.00 (jam perangkat) disembunyikan dan dihapus dari database saat ada anggota yang membuka Ola.'
@@ -1091,6 +1121,23 @@ function showLogin() {
 }
 function inviteLink() { return location.origin + location.pathname + '#db=' + encodeURIComponent(S.db); }
 
+// Kunci room: hanya di perangkat ini, disimpan sebagai hash (bukan teks asli) dan tidak dikirim ke database
+const lockKey = key => 'ngobrol.lock.' + key;
+const hasLock = key => !!LS.get(lockKey(key));
+const lockHash = (key, pass) => deriveKey('ola-lock:' + key, pass);
+async function checkLock(key, pass) { return (await lockHash(key, pass)) === LS.get(lockKey(key)); }
+let keyCheck = null, keyDone = null;
+function askKey(title, check) {
+  if (keyDone) keyDone(false);
+  return new Promise(res => {
+    keyCheck = check;
+    keyDone = ok => { $('#keyPanel').hidden = true; keyCheck = keyDone = null; res(ok); };
+    $('#keyTitle').textContent = title; $('#keyIn').value = ''; note($('#keyMsg'), '');
+    $('#keyPanel').hidden = false; $('#keyIn').focus();
+  });
+}
+function closeKey(ok) { if (keyDone) keyDone(ok); }
+
 const ROOMS_KEY = 'ngobrol.rooms';
 const getRooms = () => { const v = SS.get(ROOMS_KEY, []); return Array.isArray(v) ? v.filter(r => r && typeof r.key === 'string' && typeof r.user === 'string') : []; };
 function saveRoom(r) {
@@ -1106,12 +1153,17 @@ function fillRooms(ul) {
   ul.textContent = '';
   for (const r of getRooms()) {
     const li = el('li', r.key === S.key ? 'on' : null), go = el('button', 'go'); go.type = 'button';
-    go.append(el('b', null, r.name), el('small', null, 'Sebagai ' + r.user));
-    go.onclick = () => { if (r.key === S.key) return; if (S.key) closeRoom(); openRoom(r); };
+    go.append(el('b', null, r.name), el('small', null, 'Sebagai ' + r.user + (hasLock(r.key) ? ' · 🔒' : '')));
+    go.onclick = async () => {
+      if (r.key === S.key) return;
+      if (hasLock(r.key) && !(await askKey('Kunci untuk "' + r.name + '"', p => checkLock(r.key, p)))) return;
+      if (S.key) closeRoom();
+      openRoom(r);
+    };
     const rm = el('button', 'rm', '×'); rm.type = 'button'; rm.title = 'Hapus dari daftar'; rm.setAttribute('aria-label', 'Hapus ' + r.name + ' dari daftar');
     rm.onclick = () => {
       if (!confirm('Hapus "' + r.name + '" dari daftar? Untuk masuk lagi kamu perlu nama room dan passwordnya.')) return;
-      SS.set(ROOMS_KEY, getRooms().filter(x => x.key !== r.key));
+      SS.set(ROOMS_KEY, getRooms().filter(x => x.key !== r.key)); LS.del(lockKey(r.key));
       if (r.key === S.key) { closeRoom(); if (getRooms().length) showList(); else showLogin(); }
       else if (!getRooms().length) showLogin();
       else { renderSide(); if (!$('#v-list').hidden) showList(); }
@@ -1180,7 +1232,7 @@ function closeRoom() {
 function exitRoom() {
   const key = S.key, r = getRooms().find(x => x.key === key);
   if (!confirm('Keluar dari "' + (r ? r.name : 'room ini') + '"? Kamu perlu nama room dan password untuk masuk lagi.')) return;
-  SS.set(ROOMS_KEY, getRooms().filter(x => x.key !== key));
+  SS.set(ROOMS_KEY, getRooms().filter(x => x.key !== key)); LS.del(lockKey(key));
   leave();
 }
 function leave() { closeRoom(); if (getRooms().length) showList(); else showLogin(); }
@@ -1261,6 +1313,29 @@ function boot() {
       toast(st.still ? 'GIF terlalu besar untuk tetap bergerak, jadi stiker diam.' : 'Stiker ditambahkan');
     } catch (err) { toast(err.message || 'Gagal membuat stiker.'); }
   };
+  $('#lockSave').onclick = async () => {
+    const pass = $('#lockIn').value, key = S.key;
+    if (pass.length < 2) { toast('Kunci minimal 2 karakter.'); return; }
+    if (hasLock(key) && !(await askKey('Masukkan kunci saat ini', p => checkLock(key, p)))) return;
+    LS.set(lockKey(key), await lockHash(key, pass)); syncSettings(); toast('Kunci disimpan di perangkat ini');
+  };
+  $('#lockDel').onclick = async () => {
+    const key = S.key;
+    if (!hasLock(key) || !(await askKey('Masukkan kunci saat ini', p => checkLock(key, p)))) return;
+    LS.del(lockKey(key)); syncSettings(); toast('Kunci dihapus');
+  };
+  $('#keyForm').onsubmit = async e => {
+    e.preventDefault();
+    const v = $('#keyIn').value, b = $('#keyOk'); if (!v || !keyCheck) return;
+    b.disabled = true;
+    try {
+      if (await keyCheck(v)) closeKey(true);
+      else { note($('#keyMsg'), 'Kunci salah.', true); $('#keyIn').select(); }
+    } catch { note($('#keyMsg'), 'Gagal memeriksa kunci.', true); }
+    finally { b.disabled = false; }
+  };
+  $('#keyCancel').onclick = () => closeKey(false);
+  $('#keyPanel').addEventListener('click', e => { if (e.target === $('#keyPanel')) closeKey(false); });
   $('#pAuto').onchange = async e => {
     const on = e.target.checked;
     try {
@@ -1296,7 +1371,8 @@ function boot() {
   $('#lightbox').onclick = () => { $('#lightbox').hidden = true; };
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
-    if (!$('#lightbox').hidden) $('#lightbox').hidden = true;
+    if (!$('#keyPanel').hidden) closeKey(false);
+    else if (!$('#lightbox').hidden) $('#lightbox').hidden = true;
     else if (!$('#themePanel').hidden) closeTheme();
     else if (!$('#setPanel').hidden) closeSettings();
     else if (!$('#menu').hidden) closeMenu();
